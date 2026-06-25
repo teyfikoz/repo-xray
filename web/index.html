@@ -3,331 +3,419 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>repo-xray — Reverse-engineer any GitHub repo</title>
+<title>repo-xray — Deep analysis for any GitHub repo</title>
 <style>
-  :root {
-    --bg: #fffdf8;
-    --surface: #ffffff;
-    --border: #e8e4dc;
-    --text: #1a1a1a;
-    --muted: #6b7280;
-    --accent: #2563eb;
-    --accent-light: #eff6ff;
-    --green: #16a34a;
-    --yellow: #d97706;
-    --red: #dc2626;
-    --radius: 12px;
-    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    --mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.6; }
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #273549;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #3b82f6;
+  --accent-dim: #1e3a5f;
+  --green: #22c55e;
+  --green-dim: #14532d;
+  --yellow: #eab308;
+  --yellow-dim: #422006;
+  --red: #ef4444;
+  --red-dim: #450a0a;
+  --orange: #f97316;
+  --purple: #a855f7;
+  --radius: 10px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "SF Mono", "Fira Code", Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.6; min-height: 100vh; }
 
-  /* Header */
-  header { border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
-  .logo span { color: var(--accent); }
-  .tagline { color: var(--muted); font-size: 14px; margin-left: auto; }
+/* ── Header ─────────────────────────────────────────────── */
+header { border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; font-family: var(--mono); }
+.logo-x { color: var(--accent); }
+.header-links { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+.header-links a { color: var(--muted); font-size: 13px; text-decoration: none; transition: color 0.15s; }
+.header-links a:hover { color: var(--text); }
+.settings-btn { background: var(--surface); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+.settings-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* Hero */
-  .hero { text-align: center; padding: 60px 24px 40px; max-width: 700px; margin: 0 auto; }
-  .hero h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 800; letter-spacing: -1px; line-height: 1.15; }
-  .hero h1 em { color: var(--accent); font-style: normal; }
-  .hero p { color: var(--muted); margin-top: 12px; font-size: 16px; }
+/* ── Settings panel ──────────────────────────────────────── */
+#settings-panel { display: none; position: fixed; top: 52px; right: 16px; z-index: 100; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; width: 340px; box-shadow: 0 20px 40px #00000060; }
+#settings-panel.open { display: block; }
+.settings-label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.settings-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 13px; font-family: var(--mono); color: var(--text); margin-bottom: 12px; }
+.settings-input:focus { outline: none; border-color: var(--accent); }
+.settings-note { font-size: 12px; color: var(--muted); }
+.settings-note a { color: var(--accent); }
 
-  /* Search box */
-  .search-wrap { max-width: 680px; margin: 36px auto 0; padding: 0 24px; }
-  .search-box { display: flex; gap: 10px; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); padding: 6px 6px 6px 16px; transition: border-color 0.2s; }
-  .search-box:focus-within { border-color: var(--accent); }
-  .search-box input { flex: 1; border: none; outline: none; font-size: 16px; background: transparent; font-family: var(--mono); }
-  .search-box input::placeholder { color: #9ca3af; font-family: var(--font); }
-  .search-box button { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
-  .search-box button:hover { background: #1d4ed8; }
-  .search-box button:disabled { background: #9ca3af; cursor: not-allowed; }
+/* ── Hero ────────────────────────────────────────────────── */
+.hero { text-align: center; padding: 48px 24px 32px; max-width: 680px; margin: 0 auto; }
+.hero h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 800; letter-spacing: -1px; line-height: 1.15; }
+.hero-accent { color: var(--accent); }
+.hero p { color: var(--muted); margin-top: 10px; font-size: 15px; }
 
-  /* Format selector */
-  .format-row { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
-  .format-btn { padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--muted); }
-  .format-btn.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+/* ── Search ──────────────────────────────────────────────── */
+.search-wrap { max-width: 700px; margin: 0 auto; padding: 0 24px; }
+.search-box { display: flex; gap: 8px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); padding: 5px 5px 5px 16px; transition: border-color 0.2s; }
+.search-box:focus-within { border-color: var(--accent); }
+.search-box input { flex: 1; border: none; outline: none; font-size: 15px; background: transparent; font-family: var(--mono); color: var(--text); }
+.search-box input::placeholder { color: var(--muted); font-family: var(--font); }
+.search-box button { background: var(--accent); color: white; border: none; border-radius: 7px; padding: 9px 22px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+.search-box button:hover { background: #2563eb; }
+.search-box button:disabled { background: #475569; cursor: not-allowed; }
 
-  /* API key note */
-  .key-note { max-width: 680px; margin: 16px auto 0; padding: 0 24px; }
-  .key-note details { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 14px; }
-  .key-note summary { cursor: pointer; color: var(--muted); font-weight: 500; }
-  .key-note input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-top: 10px; font-family: var(--mono); }
-  .key-note a { color: var(--accent); }
+/* ── Mode selector ───────────────────────────────────────── */
+.mode-row { display: flex; gap: 6px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+.mode-btn { padding: 5px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--muted); }
+.mode-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); font-weight: 600; }
 
-  /* Examples */
-  .examples { max-width: 680px; margin: 20px auto 0; padding: 0 24px; display: flex; gap: 8px; flex-wrap: wrap; }
-  .ex-label { font-size: 13px; color: var(--muted); align-self: center; margin-right: 4px; }
-  .ex-chip { padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; cursor: pointer; font-family: var(--mono); transition: border-color 0.15s; }
-  .ex-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* ── Examples ────────────────────────────────────────────── */
+.examples { max-width: 700px; margin: 14px auto 0; padding: 0 24px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ex-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.ex-chip { padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 12px; cursor: pointer; font-family: var(--mono); transition: border-color 0.15s; color: var(--muted); }
+.ex-chip:hover { border-color: var(--accent); color: var(--accent); }
 
-  /* Progress */
-  #progress { display: none; max-width: 680px; margin: 24px auto 0; padding: 0 24px; }
-  .progress-inner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
-  .progress-step { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; color: var(--muted); }
-  .progress-step.active { color: var(--text); font-weight: 600; }
-  .progress-step.done { color: var(--green); }
-  .step-icon { width: 22px; text-align: center; }
-  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+/* ── Progress ────────────────────────────────────────────── */
+#progress { display: none; max-width: 600px; margin: 28px auto 0; padding: 0 24px; }
+.progress-inner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 22px; }
+.progress-step { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 14px; color: var(--muted); }
+.progress-step.active { color: var(--text); font-weight: 500; }
+.progress-step.done { color: var(--green); }
+.step-icon { width: 20px; text-align: center; font-size: 13px; }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Result */
-  #result { display: none; max-width: 960px; margin: 32px auto 60px; padding: 0 24px; }
-  .result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
-  .result-header h2 { font-size: 18px; font-weight: 700; }
-  .copy-btn { margin-left: auto; padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; cursor: pointer; font-weight: 500; transition: background 0.15s; }
-  .copy-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
-  .download-btn { padding: 7px 16px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; }
-  .download-btn:hover { background: #1d4ed8; }
+/* ── Error ───────────────────────────────────────────────── */
+#error-wrap { display: none; max-width: 700px; margin: 20px auto 0; padding: 0 24px; }
+.error-box { background: var(--red-dim); border: 1px solid var(--red); border-radius: var(--radius); padding: 14px 18px; color: #fca5a5; font-size: 14px; }
 
-  /* Markdown result */
-  #result-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; font-size: 15px; }
-  #result-content h1, #result-content h2, #result-content h3 { margin: 24px 0 10px; line-height: 1.3; }
-  #result-content h1 { font-size: 22px; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
-  #result-content h2 { font-size: 18px; }
-  #result-content p { margin: 10px 0; }
-  #result-content ul, #result-content ol { padding-left: 22px; margin: 10px 0; }
-  #result-content li { margin: 4px 0; }
-  #result-content code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
-  #result-content pre { background: #1e293b; color: #e2e8f0; border-radius: 10px; padding: 20px; overflow-x: auto; margin: 16px 0; }
-  #result-content pre code { background: none; color: inherit; padding: 0; }
-  #result-content blockquote { border-left: 4px solid var(--accent); margin: 16px 0; padding: 10px 16px; background: var(--accent-light); border-radius: 0 8px 8px 0; color: var(--muted); }
-  #result-content hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
-  #result-content a { color: var(--accent); }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
-  .badge-green { background: #dcfce7; color: var(--green); }
-  .badge-yellow { background: #fef9c3; color: var(--yellow); }
-  .badge-red { background: #fee2e2; color: var(--red); }
+/* ── Report container ────────────────────────────────────── */
+#report { display: none; max-width: 1080px; margin: 32px auto 60px; padding: 0 24px; }
 
-  /* Error */
-  #error { display: none; max-width: 680px; margin: 24px auto 0; padding: 0 24px; }
-  .error-box { background: #fee2e2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 16px 20px; color: var(--red); font-size: 14px; }
+/* ── Score ribbon ────────────────────────────────────────── */
+.score-ribbon { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+.score-card { flex: 1; min-width: 140px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.score-card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 4px; }
+.score-card-value { font-size: 26px; font-weight: 800; font-family: var(--mono); }
+.score-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.grade-a { color: var(--green); }
+.grade-b { color: #86efac; }
+.grade-c { color: var(--yellow); }
+.grade-d { color: var(--orange); }
+.grade-f { color: var(--red); }
 
-  /* Footer */
-  footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 40px; }
-  footer a { color: var(--accent); text-decoration: none; }
+/* ── Report header ───────────────────────────────────────── */
+.report-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.report-header h2 { font-size: 16px; font-weight: 700; }
+.header-badge { font-size: 12px; padding: 3px 8px; border-radius: 99px; background: var(--surface2); color: var(--muted); font-family: var(--mono); }
+.dl-btn { padding: 6px 14px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 7px; font-size: 13px; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+.dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+.dl-btn + .dl-btn { margin-left: 4px; }
+
+/* ── Tabs ────────────────────────────────────────────────── */
+.tab-bar { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+.tab-btn { padding: 9px 16px; font-size: 13px; font-weight: 500; color: var(--muted); background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Overview panel ──────────────────────────────────────── */
+.overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .overview-grid { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.card-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 10px; }
+.card-body { font-size: 14px; color: var(--text); }
+.card.full { grid-column: 1 / -1; }
+.tag-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.tag { padding: 3px 8px; border-radius: 99px; border: 1px solid var(--border); font-size: 12px; font-family: var(--mono); color: var(--muted); }
+.insight-item { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.insight-item:last-child { border-bottom: none; }
+.insight-num { color: var(--accent); font-weight: 700; margin-right: 6px; }
+.rebuild-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 13px; font-family: var(--mono); white-space: pre-wrap; word-break: break-word; color: var(--muted); line-height: 1.7; max-height: 300px; overflow-y: auto; }
+.copy-prompt-btn { margin-top: 10px; padding: 6px 14px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 13px; cursor: pointer; }
+.copy-prompt-btn:hover { border-color: var(--accent); }
+.key-files-list { list-style: none; }
+.key-files-list li { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.key-files-list li:last-child { border-bottom: none; }
+.kf-path { font-family: var(--mono); color: var(--accent); font-size: 12px; }
+.kf-role { color: var(--muted); margin-top: 2px; }
+.ai-loading { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+.ai-spinner { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; margin-bottom: 12px; }
+.difficulty-badge { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+.diff-beginner { background: var(--green-dim); color: var(--green); }
+.diff-intermediate { background: var(--yellow-dim); color: var(--yellow); }
+.diff-advanced { background: var(--red-dim); color: var(--red); }
+.meta-row { display: flex; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
+.meta-pill { font-size: 13px; color: var(--muted); }
+.meta-pill strong { color: var(--text); }
+
+/* ── Security panel ──────────────────────────────────────── */
+.findings-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.findings-table th { text-align: left; padding: 8px 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+.findings-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.sev-critical { color: #f87171; font-weight: 700; }
+.sev-high { color: var(--orange); font-weight: 600; }
+.sev-medium { color: var(--yellow); }
+.sev-low { color: var(--muted); }
+.file-path { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.snippet-code { font-family: var(--mono); font-size: 11px; background: var(--bg); padding: 2px 6px; border-radius: 4px; color: var(--muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+.section-summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; margin-bottom: 16px; font-size: 14px; }
+
+/* ── Tech debt panel ─────────────────────────────────────── */
+.debt-items { display: flex; flex-direction: column; gap: 10px; }
+.debt-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; display: flex; align-items: flex-start; gap: 12px; }
+.debt-penalty { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--red); min-width: 50px; }
+.debt-cat { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.debt-val { font-size: 13px; color: var(--text); }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+.stat-val { font-size: 22px; font-weight: 700; font-family: var(--mono); color: var(--text); }
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; }
+
+/* ── API surface panel ───────────────────────────────────── */
+.endpoint-list { display: flex; flex-direction: column; gap: 8px; }
+.endpoint-row { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.method-badge { font-size: 11px; font-weight: 700; font-family: var(--mono); padding: 2px 8px; border-radius: 4px; min-width: 52px; text-align: center; }
+.m-get { background: var(--green-dim); color: var(--green); }
+.m-post { background: var(--accent-dim); color: var(--accent); }
+.m-put, .m-patch { background: var(--yellow-dim); color: var(--yellow); }
+.m-delete { background: var(--red-dim); color: var(--red); }
+.m-other { background: var(--surface2); color: var(--muted); }
+.ep-path { font-family: var(--mono); font-size: 13px; color: var(--text); flex: 1; }
+.ep-meta { font-size: 11px; color: var(--muted); }
+
+/* ── Dep risk panel ──────────────────────────────────────── */
+.dep-items { display: flex; flex-direction: column; gap: 8px; }
+.dep-item { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.dep-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.dep-name { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
+.dep-ver { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.dep-reason { font-size: 13px; color: var(--muted); }
+.risk-critical { color: var(--red); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.risk-high { color: var(--orange); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.risk-medium { color: var(--yellow); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.risk-low { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+
+/* ── Cost panel ──────────────────────────────────────────── */
+.cost-hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.cost-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; text-align: center; }
+.cost-label { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+.cost-val { font-size: 26px; font-weight: 800; font-family: var(--mono); }
+.cost-sublabel { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.cost-junior { color: var(--green); }
+.cost-senior { color: var(--yellow); }
+.cost-agency { color: var(--red); }
+.cost-breakdown { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cost-breakdown th { text-align: left; padding: 8px 12px; color: var(--muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+.cost-breakdown td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+
+/* ── Footer ──────────────────────────────────────────────── */
+footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 20px; }
+footer a { color: var(--accent); text-decoration: none; }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">repo<span>-xray</span></div>
-  <div class="tagline">Reverse-engineer any GitHub repo</div>
+  <div class="logo">repo<span class="logo-x">-xray</span></div>
+  <div class="header-links">
+    <a href="https://github.com/teyfikoz/repo-xray" target="_blank">GitHub</a>
+    <button class="settings-btn" onclick="toggleSettings()">⚙ Settings</button>
+  </div>
 </header>
 
+<div id="settings-panel">
+  <div class="settings-label">Groq API Key</div>
+  <input class="settings-input" type="password" id="groq-key" placeholder="gsk_..." autocomplete="off">
+  <div class="settings-label">GitHub Token (optional, for higher rate limits)</div>
+  <input class="settings-input" type="password" id="gh-token" placeholder="ghp_..." autocomplete="off">
+  <div class="settings-note">
+    Get a free Groq key at <a href="https://console.groq.com" target="_blank">console.groq.com</a>.
+    Keys are stored in localStorage only.
+  </div>
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button class="dl-btn" onclick="saveSettings()" style="flex:1;">Save</button>
+    <button class="dl-btn" onclick="clearSettings()" style="color:var(--muted);">Clear</button>
+  </div>
+</div>
+
 <div class="hero">
-  <h1>Understand <em>any</em> GitHub repository<br>in 60 seconds</h1>
-  <p>AI-powered analysis — architecture, tech stack, rebuild prompt, and learning insights.</p>
+  <h1>Deep analysis for <span class="hero-accent">any</span> GitHub repo</h1>
+  <p>Security audit · Tech debt · API surface · Dependency risk · Cost estimate · AI insights</p>
 </div>
 
 <div class="search-wrap">
   <div class="search-box">
-    <input type="text" id="repo-input" placeholder="github.com/owner/repo or owner/repo" autocomplete="off" spellcheck="false">
+    <input type="text" id="repo-input" placeholder="github.com/owner/repo  or  owner/repo" autocomplete="off" spellcheck="false">
     <button id="analyse-btn" onclick="runAnalysis()">Analyse</button>
   </div>
 </div>
 
-<div class="format-row">
-  <button class="format-btn active" data-fmt="markdown" onclick="setFormat(this)">Markdown</button>
-  <button class="format-btn" data-fmt="json" onclick="setFormat(this)">JSON</button>
-  <button class="format-btn" data-fmt="plain" onclick="setFormat(this)">Plain text</button>
-</div>
-
-<div class="key-note">
-  <details id="key-details">
-    <summary>API Key required — click to configure</summary>
-    <p style="margin-top:10px; color:var(--muted); font-size:13px;">
-      Get a free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a> — no credit card needed.
-    </p>
-    <input type="password" id="groq-key-input" placeholder="gsk_..." autocomplete="off">
-  </details>
+<div class="mode-row">
+  <button class="mode-btn active" data-mode="full" onclick="setMode(this)">Full (Static + AI)</button>
+  <button class="mode-btn" data-mode="static" onclick="setMode(this)">Static only (instant)</button>
+  <button class="mode-btn" data-mode="ai" onclick="setMode(this)">AI only</button>
 </div>
 
 <div class="examples">
   <span class="ex-label">Try:</span>
   <span class="ex-chip" onclick="setExample('fastapi/fastapi')">fastapi/fastapi</span>
   <span class="ex-chip" onclick="setExample('vercel/next.js')">vercel/next.js</span>
-  <span class="ex-chip" onclick="setExample('supabase/supabase')">supabase/supabase</span>
   <span class="ex-chip" onclick="setExample('django/django')">django/django</span>
   <span class="ex-chip" onclick="setExample('expressjs/express')">expressjs/express</span>
+  <span class="ex-chip" onclick="setExample('supabase/supabase')">supabase/supabase</span>
 </div>
 
 <div id="progress">
   <div class="progress-inner">
-    <div class="progress-step" id="step1"><span class="step-icon">⏳</span> Fetching repository files...</div>
-    <div class="progress-step" id="step2"><span class="step-icon">⏳</span> Running AI analysis...</div>
-    <div class="progress-step" id="step3"><span class="step-icon">⏳</span> Formatting report...</div>
+    <div class="progress-step" id="step-fetch"><span class="step-icon">⏳</span> Fetching repository files…</div>
+    <div class="progress-step" id="step-static"><span class="step-icon">⏳</span> Running static analysis…</div>
+    <div class="progress-step" id="step-ai"><span class="step-icon">⏳</span> Running AI analysis (Groq)…</div>
   </div>
 </div>
 
-<div id="error">
+<div id="error-wrap">
   <div class="error-box" id="error-text"></div>
 </div>
 
-<div id="result">
-  <div class="result-header">
-    <h2 id="result-title">Report</h2>
-    <button class="copy-btn" onclick="copyResult()">Copy</button>
-    <button class="download-btn" onclick="downloadResult()">Download</button>
+<div id="report">
+  <div class="report-header">
+    <h2 id="report-title">Analysis</h2>
+    <span id="report-badge" class="header-badge"></span>
+    <div style="margin-left:auto; display:flex; gap:6px;">
+      <button class="dl-btn" onclick="downloadJSON()">Download JSON</button>
+      <button class="dl-btn" onclick="downloadMarkdown()">Download MD</button>
+    </div>
   </div>
-  <div id="result-content"></div>
+
+  <div class="score-ribbon" id="score-ribbon"></div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="overview" onclick="switchTab(this)">Overview</button>
+    <button class="tab-btn" data-tab="security" onclick="switchTab(this)">Security</button>
+    <button class="tab-btn" data-tab="techdebt" onclick="switchTab(this)">Tech Debt</button>
+    <button class="tab-btn" data-tab="api" onclick="switchTab(this)">API Surface</button>
+    <button class="tab-btn" data-tab="deps" onclick="switchTab(this)">Dependencies</button>
+    <button class="tab-btn" data-tab="cost" onclick="switchTab(this)">Cost</button>
+  </div>
+
+  <div class="tab-panel active" id="tab-overview">
+    <div id="overview-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Running AI analysis…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-security">
+    <div id="security-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Scanning…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-techdebt">
+    <div id="techdebt-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Scoring…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-api">
+    <div id="api-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Extracting endpoints…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-deps">
+    <div id="deps-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Analysing dependencies…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-cost">
+    <div id="cost-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Estimating cost…</div></div>
+  </div>
 </div>
 
 <footer>
-  <a href="https://github.com/teyfikoz/repo-xray" target="_blank">repo-xray</a> &nbsp;|&nbsp;
-  Powered by Groq &amp; Llama 3.3 70B &nbsp;|&nbsp;
-  Open source, MIT license
+  <a href="https://github.com/teyfikoz/repo-xray" target="_blank">repo-xray</a> &nbsp;·&nbsp;
+  Powered by Groq Llama 3.3 70B &nbsp;·&nbsp; MIT license
 </footer>
 
 <script>
-// ─── Simple Markdown parser ────────────────────────────────────────────────
-function renderMarkdown(md) {
-  let html = md
-    // Headings
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // HR
-    .replace(/^---$/gm, '<hr>')
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    // Italic
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Blockquote
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // Lists
-    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, s => '<ul>' + s + '</ul>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-    // Code blocks
-    .replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) =>
-      '<pre><code>' + code.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre>')
-    // Paragraphs (lines not already wrapped)
-    .replace(/^(?!<[a-z]|\s*$)(.+)$/gm, '<p>$1</p>');
-  return html;
-}
-
-// ─── State ─────────────────────────────────────────────────────────────────
-let currentFormat = 'markdown';
-let lastOutput = '';
+// ─────────────────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────────────────
+let currentMode = 'full';
 let lastRepo = '';
+let reportData = {};
 
-function setFormat(btn) {
-  document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  currentFormat = btn.dataset.fmt;
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+function toggleSettings() {
+  document.getElementById('settings-panel').classList.toggle('open');
 }
+function saveSettings() {
+  const gk = document.getElementById('groq-key').value.trim();
+  const gh = document.getElementById('gh-token').value.trim();
+  if (gk) localStorage.setItem('rx_groq', gk);
+  if (gh) localStorage.setItem('rx_gh', gh);
+  document.getElementById('settings-panel').classList.remove('open');
+}
+function clearSettings() {
+  localStorage.removeItem('rx_groq'); localStorage.removeItem('rx_gh');
+  document.getElementById('groq-key').value = '';
+  document.getElementById('gh-token').value = '';
+}
+(function loadSettings() {
+  const gk = localStorage.getItem('rx_groq');
+  const gh = localStorage.getItem('rx_gh');
+  if (gk) document.getElementById('groq-key').value = gk;
+  if (gh) document.getElementById('gh-token').value = gh;
+})();
 
-function setExample(repo) {
-  document.getElementById('repo-input').value = repo;
+// ─────────────────────────────────────────────────────────────────────────────
+// UI HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function setMode(btn) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentMode = btn.dataset.mode;
+}
+function setExample(r) {
+  document.getElementById('repo-input').value = r;
   document.getElementById('repo-input').focus();
 }
-
-function stepDone(id) {
+function switchTab(btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+}
+function stepSet(id, state) {
   const el = document.getElementById(id);
-  el.classList.add('done');
-  el.classList.remove('active');
-  el.querySelector('.step-icon').innerHTML = '✅';
+  el.className = 'progress-step' + (state === 'active' ? ' active' : state === 'done' ? ' done' : '');
+  const icons = { idle: '⏳', active: '<span class="spinner"></span>', done: '✅', skip: '—' };
+  el.querySelector('.step-icon').innerHTML = icons[state] || '⏳';
 }
-function stepActive(id) {
-  const el = document.getElementById(id);
-  el.classList.add('active');
-  el.querySelector('.step-icon').innerHTML = '<span class="spinner"></span>';
+function showError(msg) {
+  document.getElementById('progress').style.display = 'none';
+  document.getElementById('error-text').textContent = msg;
+  document.getElementById('error-wrap').style.display = 'block';
 }
-function stepReset(id) {
-  const el = document.getElementById(id);
-  el.className = 'progress-step';
-  el.querySelector('.step-icon').innerHTML = '⏳';
+function gradeColor(g) {
+  return { A:'grade-a', B:'grade-b', C:'grade-c', D:'grade-d', F:'grade-f' }[g] || '';
 }
 
-// ─── Main analysis ─────────────────────────────────────────────────────────
-async function runAnalysis() {
-  const repoInput = document.getElementById('repo-input').value.trim();
-  if (!repoInput) { alert('Please enter a GitHub repository URL or owner/repo.'); return; }
-
-  const groqKey = document.getElementById('groq-key-input').value.trim()
-    || localStorage.getItem('rx_groq_key') || '';
-
-  if (!groqKey) {
-    document.getElementById('key-details').open = true;
-    document.getElementById('groq-key-input').focus();
-    alert('Please enter your Groq API key first.\nGet a free key at https://console.groq.com');
-    return;
-  }
-  // Save key for session
-  localStorage.setItem('rx_groq_key', groqKey);
-
-  // Reset UI
-  document.getElementById('error').style.display = 'none';
-  document.getElementById('result').style.display = 'none';
-  document.getElementById('progress').style.display = 'block';
-  document.getElementById('analyse-btn').disabled = true;
-  ['step1','step2','step3'].forEach(stepReset);
-
-  try {
-    // Parse owner/repo
-    const [owner, repoName] = parseRepo(repoInput);
-    lastRepo = `${owner}/${repoName}`;
-
-    // Step 1: Fetch repo tree + files via GitHub API
-    stepActive('step1');
-    const repoData = await fetchRepoData(owner, repoName);
-    stepDone('step1');
-
-    // Step 2: AI analysis via Groq
-    stepActive('step2');
-    const analysis = await analyseWithGroq(repoData, groqKey);
-    stepDone('step2');
-
-    // Step 3: Format
-    stepActive('step3');
-    const formatted = formatOutput(repoData, analysis, currentFormat);
-    lastOutput = formatted;
-    stepDone('step3');
-
-    // Show result
-    document.getElementById('progress').style.display = 'none';
-    document.getElementById('result-title').textContent = `Report: ${lastRepo}`;
-    const contentEl = document.getElementById('result-content');
-    if (currentFormat === 'markdown') {
-      contentEl.innerHTML = renderMarkdown(formatted);
-    } else {
-      contentEl.innerHTML = '<pre style="white-space:pre-wrap;font-size:13px;">' +
-        formatted.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>';
-    }
-    document.getElementById('result').style.display = 'block';
-
-  } catch(e) {
-    document.getElementById('progress').style.display = 'none';
-    document.getElementById('error-text').textContent = 'Error: ' + e.message;
-    document.getElementById('error').style.display = 'block';
-  } finally {
-    document.getElementById('analyse-btn').disabled = false;
-  }
-}
-
+// ─────────────────────────────────────────────────────────────────────────────
+// REPO FETCH (GitHub API, no key required for public repos)
+// ─────────────────────────────────────────────────────────────────────────────
 function parseRepo(input) {
-  input = input.trim().replace(/\/+$/, '');
-  const match = input.match(/github\.com[:/]?([^/]+)\/([^/.\s]+)/);
-  if (match) return [match[1], match[2].replace('.git', '')];
+  input = input.trim().replace(/\/+$/, '').replace(/\.git$/, '');
+  const m = input.match(/github\.com[/:]([^/]+)\/([^/\s]+)/);
+  if (m) return [m[1], m[2]];
   const parts = input.split('/').filter(Boolean);
-  if (parts.length >= 2) return [parts[parts.length - 2], parts[parts.length - 1]];
-  throw new Error(`Cannot parse GitHub URL: ${input}`);
+  if (parts.length >= 2) return [parts[parts.length-2], parts[parts.length-1]];
+  throw new Error('Cannot parse GitHub URL: ' + input);
 }
 
 async function fetchRepoData(owner, repo) {
-  const BASE = 'https://api.github.com';
-  const h = { 'Accept': 'application/vnd.github+json', 'User-Agent': 'repo-xray/1.0' };
+  const ghToken = localStorage.getItem('rx_gh');
+  const h = { 'Accept': 'application/vnd.github+json', 'User-Agent': 'repo-xray/2.0' };
+  if (ghToken) h['Authorization'] = 'Bearer ' + ghToken;
 
-  const [meta, treeData, readmeMeta] = await Promise.all([
-    fetch(`${BASE}/repos/${owner}/${repo}`, {headers:h}).then(r => r.ok ? r.json() : Promise.reject('Repo not found or private')),
-    fetch(`${BASE}/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`, {headers:h}).then(r => r.ok ? r.json() : {tree:[]}),
-    fetch(`${BASE}/repos/${owner}/${repo}/readme`, {headers:h}).then(r => r.ok ? r.json() : null).catch(() => null),
+  const [meta, treeResp, readmeMeta] = await Promise.all([
+    fetch(`https://api.github.com/repos/${owner}/${repo}`, {headers:h})
+      .then(r => r.ok ? r.json() : Promise.reject('Repo not found or private (check GitHub token in Settings)')),
+    fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`, {headers:h})
+      .then(r => r.ok ? r.json() : {tree:[]}),
+    fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, {headers:h})
+      .then(r => r.ok ? r.json() : null).catch(() => null),
   ]);
 
   let readme = '';
@@ -335,80 +423,361 @@ async function fetchRepoData(owner, repo) {
     try { readme = atob(readmeMeta.content.replace(/\n/g,'')).slice(0, 2000); } catch {}
   }
 
-  // Filter files
-  const SKIP = new Set(['node_modules','.git','dist','build','__pycache__','.next','vendor','venv','.venv']);
-  const SRC_EXT = new Set(['.py','.js','.ts','.tsx','.jsx','.go','.rs','.java','.kt','.swift','.c','.cpp','.h','.cs','.rb','.php','.vue','.svelte','.html','.css','.scss','.sql','.sh','.yaml','.yml','.toml','.json','.md','.prisma','.graphql']);
-  const candidates = (treeData.tree||[]).filter(f => {
-    if (f.type !== 'blob' || f.size > 100000) return false;
+  const SKIP = new Set(['node_modules','.git','dist','build','__pycache__','.next','vendor','venv','.venv','coverage','.cache']);
+  const SRC_EXT = new Set(['.py','.js','.ts','.tsx','.jsx','.go','.rs','.java','.kt','.swift','.c','.cpp','.h','.cs','.rb','.php','.vue','.svelte','.html','.css','.scss','.sql','.sh','.yaml','.yml','.toml','.json','.md','.prisma','.graphql','.lock','.txt']);
+  const IMPORTANT = new Set(['package.json','requirements.txt','cargo.toml','go.mod','gemfile','pom.xml','dockerfile','makefile','.env.example','pyproject.toml']);
+
+  const candidates = (treeResp.tree || []).filter(f => {
+    if (f.type !== 'blob') return false;
     const parts = f.path.split('/');
-    if (parts.slice(0,-1).some(p => SKIP.has(p))) return false;
+    if (parts.slice(0,-1).some(p => SKIP.has(p.toLowerCase()))) return false;
     const name = parts[parts.length-1].toLowerCase();
-    if (['readme.md','dockerfile','makefile','.env.example'].includes(name)) return true;
+    if (IMPORTANT.has(name)) return true;
+    if (f.size > 120000) return false;
     const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
     return SRC_EXT.has(ext);
-  }).sort((a,b) => a.path.split('/').length - b.path.split('/').length || a.size - b.size).slice(0, 40);
+  }).sort((a,b) => {
+    const aImp = IMPORTANT.has(a.path.split('/').pop().toLowerCase()) ? 0 : 1;
+    const bImp = IMPORTANT.has(b.path.split('/').pop().toLowerCase()) ? 0 : 1;
+    return aImp - bImp || a.path.split('/').length - b.path.split('/').length || a.size - b.size;
+  }).slice(0, 60);
 
-  // Fetch up to 20 files
-  const MAX_FILES = 20, MAX_CHARS = 40000;
+  const MAX_FILES = 30, MAX_CHARS = 60000;
   let totalChars = 0;
   const files = [];
   for (const item of candidates) {
     if (files.length >= MAX_FILES || totalChars >= MAX_CHARS) break;
     try {
-      const raw = await fetch(
-        `https://raw.githubusercontent.com/${owner}/${repo}/${meta.default_branch||'main'}/${item.path}`
-      );
-      if (!raw.ok) continue;
-      let content = await raw.text();
-      if (content.length > 3000) content = content.slice(0,3000) + '\n... [truncated]';
-      files.push({ path: item.path, content });
+      const r = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${meta.default_branch||'main'}/${item.path}`);
+      if (!r.ok) continue;
+      let content = await r.text();
+      if (content.length > 4000) content = content.slice(0,4000) + '\n... [truncated]';
+      files.push({ path: item.path, content, size: item.size || content.length });
       totalChars += content.length;
     } catch {}
   }
 
-  return { owner, repo, meta, readme, files };
+  return { owner, repo, meta, readme, files, tree: treeResp.tree || [] };
 }
 
-async function analyseWithGroq(repoData, apiKey) {
-  const {owner, repo, meta, readme, files} = repoData;
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — SECURITY
+// ─────────────────────────────────────────────────────────────────────────────
+const SECURITY_RULES = [
+  // Secrets
+  { cat:'Secrets', sev:'critical', re:/(?:api[_-]?key|secret|password|passwd|token|credential)[\s:='"]+[A-Za-z0-9_\-\/+]{16,}/gi, desc:'Hardcoded secret or credential' },
+  { cat:'Secrets', sev:'critical', re:/(?:sk-|gsk_|pk-|rk-)[A-Za-z0-9]{20,}/g, desc:'AI/payment API key exposed' },
+  { cat:'Secrets', sev:'high',     re:/(?:BEGIN (?:RSA |EC )?PRIVATE KEY)/g, desc:'Private key in source' },
+  { cat:'Secrets', sev:'high',     re:/(?:eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g, desc:'JWT token hardcoded' },
+  // SQL Injection
+  { cat:'SQL Injection', sev:'critical', re:/(?:execute|cursor\.execute|db\.query)\s*\(\s*["'`][^"'`]*%[^"'`]*["'`]\s*%/gi, desc:'String formatting in SQL query' },
+  { cat:'SQL Injection', sev:'critical', re:/(?:execute|cursor\.execute)\s*\(\s*f["']/gi, desc:'f-string in SQL execute()' },
+  { cat:'SQL Injection', sev:'high',     re:/(?:SELECT|INSERT|UPDATE|DELETE|DROP)\s+.*\+\s*(?:req\.|request\.|params\.|query\.)/gi, desc:'SQL built with user input concatenation' },
+  // Command Injection
+  { cat:'Command Injection', sev:'critical', re:/(?:exec|system|popen|subprocess\.call|os\.system)\s*\([^)]*(?:request\.|req\.|params\.|input\()/gi, desc:'User input passed to shell command' },
+  { cat:'Command Injection', sev:'high',     re:/(?:shell=True)/g, desc:'subprocess with shell=True' },
+  { cat:'Command Injection', sev:'high',     re:/(?:exec|eval)\s*\(\s*(?:req\.|request\.|params\.)/gi, desc:'eval/exec with user input' },
+  // Weak Crypto
+  { cat:'Weak Crypto', sev:'high',   re:/(?:md5|sha1)\s*\(/gi, desc:'Weak hashing algorithm (MD5/SHA1)' },
+  { cat:'Weak Crypto', sev:'medium', re:/random\.random\(\)|Math\.random\(\)/g, desc:'Non-cryptographic random for security' },
+  { cat:'Weak Crypto', sev:'medium', re:/DES|RC4|ECB/g, desc:'Weak cipher detected' },
+  // XSS
+  { cat:'XSS', sev:'high',   re:/innerHTML\s*=\s*(?!["'`][^$])/g, desc:'Unsanitized innerHTML assignment' },
+  { cat:'XSS', sev:'medium', re:/document\.write\s*\(/g, desc:'document.write() usage (XSS risk)' },
+  { cat:'XSS', sev:'medium', re:/dangerouslySetInnerHTML/g, desc:'React dangerouslySetInnerHTML' },
+  // Insecure Config
+  { cat:'Insecure Config', sev:'high',   re:/DEBUG\s*=\s*True/g, desc:'Debug mode enabled in production config' },
+  { cat:'Insecure Config', sev:'medium', re:/CORS_ALLOW_ALL_ORIGINS\s*=\s*True|cors\(\s*\{[^}]*origin:\s*['"`]\*['"`]/g, desc:'CORS wildcard allows all origins' },
+  { cat:'Insecure Config', sev:'medium', re:/verify\s*=\s*False/g, desc:'SSL verification disabled' },
+  // Path Traversal
+  { cat:'Path Traversal', sev:'high',   re:/open\s*\(\s*(?:request\.|req\.|params\.|f["'])/gi, desc:'User-controlled file path in open()' },
+  { cat:'Path Traversal', sev:'medium', re:/\.\.\//g, desc:'Path traversal pattern detected' },
+];
 
-  let context = `# Repository: ${owner}/${repo}\n`;
-  context += `Description: ${meta.description || 'none'}\n`;
-  context += `Language: ${meta.language || 'unknown'} | Stars: ${(meta.stargazers_count||0).toLocaleString()} | Forks: ${(meta.forks_count||0).toLocaleString()}\n`;
-  context += `Topics: ${(meta.topics||[]).join(', ') || 'none'}\n\n`;
-  if (readme) context += `## README\n${readme}\n\n`;
-  context += `## Source Files (${files.length})\n`;
+function runSecurityAudit(files) {
+  const findings = [];
+  const seen = new Set();
+  const TEST_RE = /test|spec|mock/i;
+
   for (const f of files) {
-    context += `\n### ${f.path}\n\`\`\`\n${f.content}\n\`\`\`\n`;
+    const isTest = TEST_RE.test(f.path);
+    const lines = f.content.split('\n');
+    for (const rule of SECURITY_RULES) {
+      if (isTest && (rule.sev === 'low' || rule.sev === 'medium')) continue;
+      lines.forEach((line, idx) => {
+        rule.re.lastIndex = 0;
+        if (rule.re.test(line)) {
+          const key = `${f.path}:${idx+1}:${rule.cat}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            findings.push({ file: f.path, line: idx+1, severity: rule.sev, category: rule.cat, description: rule.desc, snippet: line.trim().slice(0,120) });
+          }
+        }
+      });
+    }
   }
 
-  const systemPrompt = `You are an expert software architect and technical educator. Analyse GitHub repositories and produce clear, insightful JSON reports. Be concise and precise.`;
-  const userPrompt = `Analyse this repository and return ONLY a valid JSON object with these keys:
-{
-  "summary": "2-3 sentence plain-English description",
-  "tech_stack": ["list of technologies/frameworks"],
-  "architecture": "2-3 sentences on architecture pattern",
-  "key_files": [{"path": "...", "role": "one sentence"}],
-  "difficulty": "beginner|intermediate|advanced",
-  "learning_insights": ["insight 1", "insight 2", "insight 3"],
-  "ai_rebuild_prompt": "Detailed prompt to recreate this project from scratch",
-  "quick_start_guide": "Step-by-step setup instructions",
-  "similar_projects": ["related project or library names"],
-  "fun_fact": "One surprising fact about this codebase or tech"
-}
-Return ONLY JSON. No markdown fences.
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  findings.forEach(f => counts[f.severity]++);
+  const penalty = counts.critical*25 + counts.high*10 + counts.medium*4 + counts.low*1;
+  const score = Math.max(0, 100 - penalty);
+  const grade = score>=80?'A':score>=65?'B':score>=45?'C':score>=25?'D':'F';
 
-REPOSITORY:
-${context}`;
+  return { score, grade, findings, counts,
+    summary: `${findings.length} finding(s): ${counts.critical} critical, ${counts.high} high, ${counts.medium} medium, ${counts.low} low.` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — TECH DEBT
+// ─────────────────────────────────────────────────────────────────────────────
+function runTechDebt(files, tree) {
+  const items = [];
+  let penalty = 0;
+
+  const allFiles = files.filter(f => !f.path.includes('node_modules'));
+  const totalLoc = allFiles.reduce((s,f) => s + f.content.split('\n').length, 0);
+  const testFiles = allFiles.filter(f => /test|spec/__tests__|\.test\.|\.spec\./i.test(f.path));
+  const testRatio = allFiles.length ? testFiles.length / allFiles.length : 0;
+  const avgLines = allFiles.length ? Math.round(totalLoc / allFiles.length) : 0;
+
+  // TODO/FIXME count
+  const allContent = allFiles.map(f=>f.content).join('\n');
+  const todoCount = (allContent.match(/\b(?:TODO|FIXME|HACK|XXX)\b/g)||[]).length;
+  const todoPerFile = allFiles.length ? todoCount / allFiles.length : 0;
+  if (todoPerFile > 5) { penalty += 20; items.push({ cat:'TODO Density', penalty:20, value:`${todoCount} TODOs across ${allFiles.length} files (${todoPerFile.toFixed(1)}/file)` }); }
+  else if (todoPerFile > 2) { penalty += 10; items.push({ cat:'TODO Density', penalty:10, value:`${todoCount} TODOs (${todoPerFile.toFixed(1)}/file)` }); }
+
+  // Test ratio
+  if (testRatio < 0.05 && allFiles.length > 5) { penalty += 25; items.push({ cat:'No Tests', penalty:25, value:`Only ${Math.round(testRatio*100)}% test files` }); }
+  else if (testRatio < 0.15) { penalty += 12; items.push({ cat:'Low Test Coverage', penalty:12, value:`${Math.round(testRatio*100)}% test files` }); }
+
+  // God files (>400 lines)
+  const godFiles = allFiles.filter(f => f.content.split('\n').length > 400);
+  if (godFiles.length > 3) { penalty += 20; items.push({ cat:'God Files', penalty:20, value:`${godFiles.length} files >400 lines: ${godFiles.slice(0,3).map(f=>f.path).join(', ')}` }); }
+  else if (godFiles.length > 0) { penalty += 8; items.push({ cat:'God Files', penalty:8, value:`${godFiles.length} file(s) >400 lines` }); }
+
+  // console.log in JS/TS
+  const jsFiles = allFiles.filter(f => /\.(js|ts|jsx|tsx)$/.test(f.path) && !/test|spec/i.test(f.path));
+  const consoleLogs = jsFiles.reduce((s,f) => s + (f.content.match(/console\.log\(/g)||[]).length, 0);
+  if (consoleLogs > 10) { penalty += 10; items.push({ cat:'Debug Logging', penalty:10, value:`${consoleLogs} console.log() calls in production JS/TS` }); }
+  else if (consoleLogs > 3) { penalty += 5; items.push({ cat:'Debug Logging', penalty:5, value:`${consoleLogs} console.log() calls` }); }
+
+  // Deprecated markers
+  const deprecatedCount = (allContent.match(/\b(?:deprecated|DEPRECATED|@deprecated)\b/g)||[]).length;
+  if (deprecatedCount > 5) { penalty += 10; items.push({ cat:'Deprecated Code', penalty:10, value:`${deprecatedCount} deprecated markers` }); }
+
+  // Magic numbers (Python/JS heuristic)
+  const magicNums = (allContent.match(/(?<![.a-zA-Z_])(?<!['"])\b(?!0\b|1\b|2\b|100\b|0\.)\d{3,}\b(?!['"])/g)||[]).length;
+  if (magicNums > 20) { penalty += 8; items.push({ cat:'Magic Numbers', penalty:8, value:`${magicNums} unexplained numeric literals` }); }
+
+  const score = Math.max(0, 100 - penalty);
+  const grade = score>=80?'A':score>=65?'B':score>=45?'C':score>=25?'D':'F';
+
+  return { score, grade, items, totalLoc, testRatioPct: Math.round(testRatio*100), avgFileLoc: avgLines, todoCount,
+    summary: `${totalLoc.toLocaleString()} LOC across ${allFiles.length} files. Test ratio: ${Math.round(testRatio*100)}%. ${todoCount} TODOs.` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — API SURFACE
+// ─────────────────────────────────────────────────────────────────────────────
+const API_PATTERNS = [
+  { fw:'FastAPI',     re:/@app\.(get|post|put|patch|delete|options)\s*\(\s*["']([^"']+)["']/gi },
+  { fw:'FastAPI',     re:/@router\.(get|post|put|patch|delete|options)\s*\(\s*["']([^"']+)["']/gi },
+  { fw:'Flask',       re:/@(?:app|bp|blueprint)\.route\(\s*["']([^"']+)["'].*?methods\s*=\s*\[([^\]]+)\]/gis },
+  { fw:'Flask',       re:/@(?:app|bp)\.(?:get|post|put|patch|delete)\s*\(\s*["']([^"']+)["']/gi },
+  { fw:'Express',     re:/(?:app|router)\.(get|post|put|patch|delete|use)\s*\(\s*["'`]([^"'`]+)["'`]/gi },
+  { fw:'Fastify',     re:/fastify\.(get|post|put|patch|delete)\s*\(\s*["'`]([^"'`]+)["'`]/gi },
+  { fw:'Django',      re:/path\s*\(\s*["']([^"']+)["']/g },
+  { fw:'Gin',         re:/(?:r|router|v\d+)\.(GET|POST|PUT|PATCH|DELETE)\s*\(\s*["']([^"']+)["']/g },
+  { fw:'Spring',      re:/@(?:Get|Post|Put|Patch|Delete|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/g },
+  { fw:'Next.js',     re:/export\s+(?:async\s+)?function\s+(?:GET|POST|PUT|PATCH|DELETE)\s*\(/g },
+  { fw:'Laravel',     re:/Route::(get|post|put|patch|delete)\s*\(\s*["']([^"']+)["']/gi },
+  { fw:'Rails',       re:/(?:get|post|put|patch|delete|resources?)\s+["']([^"']+)["']/gi },
+];
+
+function runApiSurface(files) {
+  const endpoints = [];
+  const seen = new Set();
+
+  for (const f of files) {
+    for (const pat of API_PATTERNS) {
+      let m;
+      pat.re.lastIndex = 0;
+      while ((m = pat.re.exec(f.content)) !== null) {
+        let method = 'ANY', path = '';
+        if (pat.fw === 'Flask' && m[0].includes('methods')) {
+          path = m[1] || '';
+          const methods = (m[2]||'GET').split(',').map(s=>s.trim().replace(/['"\s]/g,''));
+          for (const method of methods) {
+            const key = `${f.path}:${path}:${method}`;
+            if (!seen.has(key)) { seen.add(key); endpoints.push({ method, path, framework: pat.fw, file: f.path }); }
+          }
+          continue;
+        }
+        if (pat.fw === 'Next.js') {
+          const methodM = m[0].match(/(GET|POST|PUT|PATCH|DELETE)/);
+          method = methodM ? methodM[1] : 'ANY';
+          path = f.path.replace(/.*app\//, '/').replace(/\/route\.(js|ts)$/, '').replace(/\[([^\]]+)\]/, ':$1') || '/';
+        } else if (m.length >= 3) {
+          method = (m[1]||'ANY').toUpperCase();
+          path = m[2] || m[1] || '';
+        } else {
+          path = m[1] || '';
+        }
+        if (!path) continue;
+        const key = `${f.path}:${path}:${method}`;
+        if (!seen.has(key)) { seen.add(key); endpoints.push({ method, path, framework: pat.fw, file: f.path }); }
+      }
+    }
+  }
+
+  const frameworks = [...new Set(endpoints.map(e=>e.framework))];
+  return { endpoints, count: endpoints.length, frameworks,
+    summary: `${endpoints.length} endpoint(s) detected across ${frameworks.join(', ')||'unknown'} framework(s).` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — DEPENDENCY RISK
+// ─────────────────────────────────────────────────────────────────────────────
+const RISKY_DEPS = {
+  'event-stream':        { risk:'critical', reason:'Known malware (2018 supply chain attack)' },
+  'pycrypto':            { risk:'critical', reason:'Abandoned, CVE vulnerabilities — use pycryptodome' },
+  'node-serialize':      { risk:'critical', reason:'Known RCE vulnerability (CVE-2017-5941)' },
+  'flatmap-stream':      { risk:'critical', reason:'Malicious package (2018)' },
+  'request':             { risk:'high', reason:'Deprecated since 2020, no security patches' },
+  'lodash':              { risk:'medium', reason:'Prototype pollution vulns in older versions' },
+  'moment':              { risk:'medium', reason:'Deprecated, large bundle size — use date-fns/dayjs' },
+  'urllib3':             { risk:'medium', reason:'Ensure >=2.0 for security patches' },
+  'pillow':              { risk:'low', reason:'Frequent CVEs — keep updated' },
+  'django':              { risk:'low', reason:'LTS version recommended' },
+  'flask':               { risk:'low', reason:'Ensure >=3.0 for security patches' },
+  'cryptography':        { risk:'low', reason:'Keep updated, frequent vulnerability patches' },
+  'axios':               { risk:'low', reason:'SSRF vulnerability in versions <1.7.4' },
+  'serialize-javascript':{ risk:'high', reason:'XSS vulnerability in older versions' },
+  'xmldom':              { risk:'high', reason:'Prototype pollution (CVE-2021-21366)' },
+  'minimist':            { risk:'medium', reason:'Prototype pollution in older versions' },
+  'qs':                  { risk:'medium', reason:'Prototype pollution — ensure >=6.7.3' },
+  'tar':                 { risk:'medium', reason:'Path traversal CVEs — keep updated' },
+  'semver':              { risk:'low', reason:'ReDoS in older versions' },
+  'debug':               { risk:'low', reason:'ReDoS in <2.6.9' },
+};
+
+function runDepRisk(files) {
+  const findings = [];
+  let pkgCount = 0;
+  let hasLockFile = false;
+
+  for (const f of files) {
+    const fname = f.path.split('/').pop().toLowerCase();
+    if (['package-lock.json','yarn.lock','pnpm-lock.yaml','poetry.lock','pipfile.lock','cargo.lock'].includes(fname)) {
+      hasLockFile = true;
+    }
+    if (fname === 'package.json') {
+      try {
+        const pkg = JSON.parse(f.content);
+        const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+        for (const [name, ver] of Object.entries(allDeps)) {
+          pkgCount++;
+          if (RISKY_DEPS[name]) findings.push({ name, version: ver, ...RISKY_DEPS[name] });
+        }
+      } catch {}
+    }
+    if (fname === 'requirements.txt' || fname === 'requirements-dev.txt') {
+      const lines = f.content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+      pkgCount += lines.length;
+      for (const line of lines) {
+        const name = line.split(/[>=<!~\[;]/)[0].trim().toLowerCase();
+        if (RISKY_DEPS[name]) findings.push({ name, version: line.trim(), ...RISKY_DEPS[name] });
+      }
+    }
+  }
+
+  let penalty = 0;
+  findings.forEach(f => { penalty += { critical:30, high:15, medium:8, low:3 }[f.risk]||0; });
+  if (!hasLockFile && pkgCount > 0) { penalty += 15; findings.push({ name:'(lock file missing)', version:'', risk:'medium', reason:'No lock file detected — versions may drift' }); }
+
+  const riskScore = Math.min(100, penalty);
+  const grade = riskScore<=15?'A':riskScore<=30?'B':riskScore<=50?'C':riskScore<=70?'D':'F';
+
+  return { riskScore, grade, findings, pkgCount, hasLockFile,
+    summary: `${pkgCount} packages scanned. ${findings.length} risky package(s) found.` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — COST ESTIMATOR
+// ─────────────────────────────────────────────────────────────────────────────
+const COMPLEXITY = {
+  '.py':1.0, '.go':1.1, '.rs':1.3, '.c':1.2, '.cpp':1.3, '.java':0.9, '.kt':1.0,
+  '.ts':1.0, '.tsx':1.1, '.js':0.8, '.jsx':0.9, '.vue':1.1, '.svelte':1.1,
+  '.cs':0.9, '.rb':0.8, '.php':0.8, '.swift':1.1,
+  '.sql':0.7, '.graphql':0.6, '.prisma':0.6,
+  '.html':0.4, '.css':0.3, '.scss':0.4,
+  '.yaml':0.4, '.yml':0.4, '.toml':0.3, '.json':0.2,
+  '.sh':0.6, '.md':0.1,
+};
+function estimateCost(files) {
+  const byCategory = {};
+  let totalLoc = 0, effectiveHours = 0;
+
+  for (const f of files) {
+    const ext = f.path.includes('.') ? '.' + f.path.split('.').pop().toLowerCase() : '';
+    const mult = COMPLEXITY[ext] || 0.5;
+    const loc = f.content.split('\n').length;
+    const cat = ext.replace('.','').toUpperCase() || 'OTHER';
+    if (!byCategory[cat]) byCategory[cat] = { loc:0, hours:0 };
+    byCategory[cat].loc += loc;
+    totalLoc += loc;
+    effectiveHours += (loc * mult) / 150;  // 150 effective LOC/hr
+  }
+
+  Object.keys(byCategory).forEach(k => {
+    const ext = '.'+k.toLowerCase();
+    const mult = COMPLEXITY[ext] || 0.5;
+    byCategory[k].hours = (byCategory[k].loc * mult) / 150;
+  });
+
+  // Architecture complexity bonus
+  const allPaths = files.map(f=>f.path).join('\n').toLowerCase();
+  let archBonus = 1.0;
+  if (/docker-compose/.test(allPaths)) archBonus += 0.15;
+  if (/kubernetes|k8s/.test(allPaths)) archBonus += 0.30;
+  if (/\.github\/workflows/.test(allPaths)) archBonus += 0.10;
+  if (/graphql/.test(allPaths)) archBonus += 0.15;
+  effectiveHours *= archBonus;
+
+  const juniorUsd = Math.round(effectiveHours * 25);
+  const seniorUsd = Math.round(effectiveHours * 90);
+  const agencyUsd = Math.round(effectiveHours * 200);
+  const soloWeeks = effectiveHours / 40;
+  const teamWeeks = soloWeeks / 3;
+
+  const breakdown = Object.entries(byCategory)
+    .sort((a,b) => b[1].loc - a[1].loc)
+    .slice(0, 8)
+    .map(([cat, v]) => ({ category: cat, loc: v.loc, hours: v.hours }));
+
+  return { totalLoc, effectiveHours, juniorUsd, seniorUsd, agencyUsd, soloWeeks, teamWeeks, breakdown,
+    summary: `${totalLoc.toLocaleString()} LOC → ~${Math.round(effectiveHours)} effective hours.` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI ANALYSIS (Groq)
+// ─────────────────────────────────────────────────────────────────────────────
+async function callGroq(repoData, groqKey) {
+  const {owner, repo, meta, readme, files} = repoData;
+  let ctx = `# ${owner}/${repo}\nDescription: ${meta.description||'none'}\nLanguage: ${meta.language||'?'} | Stars: ${(meta.stargazers_count||0).toLocaleString()}\nTopics: ${(meta.topics||[]).join(', ')||'none'}\n\n`;
+  if (readme) ctx += `## README\n${readme}\n\n`;
+  ctx += `## Files (${files.length})\n`;
+  for (const f of files.slice(0,25)) ctx += `\n### ${f.path}\n\`\`\`\n${f.content}\n\`\`\`\n`;
 
   const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: 'system', content: 'You are an expert software architect. Analyse GitHub repos and return concise JSON.' },
+        { role: 'user', content: `Return ONLY valid JSON with these keys: summary, tech_stack (array), architecture, key_files (array of {path,role}), difficulty (beginner|intermediate|advanced), learning_insights (array of 3), ai_rebuild_prompt, quick_start_guide, similar_projects (array), fun_fact.\n\nREPO:\n${ctx}` }
       ],
       temperature: 0.3,
       max_tokens: 4096,
@@ -417,101 +786,305 @@ ${context}`;
   });
 
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Groq API error ${resp.status}`);
+    const err = await resp.json().catch(()=>({}));
+    throw new Error(err?.error?.message || `Groq API ${resp.status}`);
   }
-
   const data = await resp.json();
   let content = data.choices[0].message.content.trim();
-  if (content.startsWith('```')) {
-    content = content.split('```')[1].replace(/^json/, '').trim();
-    content = content.split('```')[0].trim();
-  }
+  if (content.startsWith('```')) { content = content.split('```')[1].replace(/^json/,'').trim(); content = content.split('```')[0].trim(); }
   return JSON.parse(content);
 }
 
-function formatOutput(repoData, analysis, format) {
-  const {owner, repo, meta} = repoData;
-  const fullName = `${owner}/${repo}`;
-  const stars = (meta.stargazers_count||0).toLocaleString();
-  const forks = (meta.forks_count||0).toLocaleString();
-
-  if (format === 'json') {
-    return JSON.stringify(analysis, null, 2);
-  }
-  if (format === 'plain') {
-    const lines = [
-      '='.repeat(60),
-      `REPO-XRAY REPORT: ${fullName}`,
-      '='.repeat(60), '',
-      'SUMMARY', '-'.repeat(40), analysis.summary||'', '',
-      `TECH STACK: ${(analysis.tech_stack||[]).join(', ')}`,
-      `DIFFICULTY: ${(analysis.difficulty||'').toUpperCase()}`,
-      `STARS: ${stars} | FORKS: ${forks}`, '',
-      'ARCHITECTURE', '-'.repeat(40), analysis.architecture||'', '',
-      'LEARNING INSIGHTS', '-'.repeat(40),
-      ...(analysis.learning_insights||[]).map((ins, i) => `${i+1}. ${ins}`), '',
-      'AI REBUILD PROMPT', '-'.repeat(40), analysis.ai_rebuild_prompt||'', '',
-      'QUICK START', '-'.repeat(40), analysis.quick_start_guide||'', '',
-      `FUN FACT: ${analysis.fun_fact||''}`, '',
-      '='.repeat(60),
-    ];
-    return lines.join('\n');
-  }
-
-  // Markdown
-  const diffEmoji = {beginner:'🟢', intermediate:'🟡', advanced:'🔴'}[analysis.difficulty?.toLowerCase()] || '⚪';
-  const lines = [
-    `# repo-xray report: [${fullName}](https://github.com/${fullName})`, '',
-    `> ⭐ ${stars} stars  |  🍴 ${forks} forks  |  ${diffEmoji} ${(analysis.difficulty||'').charAt(0).toUpperCase()+(analysis.difficulty||'').slice(1)}`, '',
-    '---', '',
-    '## What is this?', '', analysis.summary||'', '',
-    '## Tech Stack', '',
-    ...(analysis.tech_stack||[]).map(t => `- \`${t}\``), '',
-    '## Architecture', '', analysis.architecture||'', '',
-    '## Key Files', '',
-    ...(analysis.key_files||[]).map(kf => `- **\`${kf.path}\`** — ${kf.role}`), '',
-    '## Learning Insights', '',
-    ...(analysis.learning_insights||[]).flatMap((ins,i) => [`**${i+1}.** ${ins}`, '']),
-    '## AI Rebuild Prompt', '',
-    '> Copy this prompt into any AI coding agent to recreate the project.', '',
-    '```', analysis.ai_rebuild_prompt||'', '```', '',
-    '## Quick Start Guide', '', analysis.quick_start_guide||'', '',
-    '## Explore More', '',
-    ...(analysis.similar_projects||[]).map(s => `- ${s}`), '',
-    '---', '',
-    `**Fun fact:** ${analysis.fun_fact||''}`, '',
-    `*Generated by [repo-xray](https://github.com/teyfikoz/repo-xray)*`,
+// ─────────────────────────────────────────────────────────────────────────────
+// RENDER FUNCTIONS
+// ─────────────────────────────────────────────────────────────────────────────
+function renderScoreRibbon(rd) {
+  const { security, techDebt, apiSurface, depRisk, cost } = rd;
+  const cards = [
+    security ? `<div class="score-card"><div class="score-card-label">Security</div><div class="score-card-value ${gradeColor(security.grade)}">${security.score}</div><div class="score-card-sub">Grade ${security.grade} · ${security.counts.critical}C ${security.counts.high}H</div></div>` : '',
+    techDebt ? `<div class="score-card"><div class="score-card-label">Tech Debt</div><div class="score-card-value ${gradeColor(techDebt.grade)}">${techDebt.score}</div><div class="score-card-sub">Grade ${techDebt.grade} · ${techDebt.testRatioPct}% tests</div></div>` : '',
+    apiSurface ? `<div class="score-card"><div class="score-card-label">API Surface</div><div class="score-card-value" style="color:var(--accent)">${apiSurface.count}</div><div class="score-card-sub">${apiSurface.frameworks.slice(0,2).join(', ')||'endpoints'}</div></div>` : '',
+    depRisk ? `<div class="score-card"><div class="score-card-label">Dep Risk</div><div class="score-card-value ${gradeColor(depRisk.grade)}">${depRisk.riskScore}</div><div class="score-card-sub">Grade ${depRisk.grade} · ${depRisk.findings.length} risky</div></div>` : '',
+    cost ? `<div class="score-card"><div class="score-card-label">Rebuild Cost</div><div class="score-card-value" style="color:var(--green)">$${(cost.juniorUsd/1000).toFixed(0)}k</div><div class="score-card-sub">Jr · $${(cost.seniorUsd/1000).toFixed(0)}k Sr</div></div>` : '',
   ];
-  return lines.join('\n');
+  document.getElementById('score-ribbon').innerHTML = cards.join('');
 }
 
-function copyResult() {
-  navigator.clipboard.writeText(lastOutput).then(() => {
-    const btn = document.querySelector('.copy-btn');
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
-  });
+function renderOverview(ai, repoData) {
+  if (!ai) {
+    document.getElementById('overview-content').innerHTML = `<div class="empty-state">No AI analysis available.<br>Add a Groq API key in Settings and run in Full or AI mode.</div>`;
+    return;
+  }
+  const { meta } = repoData;
+  const diff = (ai.difficulty||'').toLowerCase();
+  const diffBadge = `<span class="difficulty-badge diff-${diff}">${ai.difficulty||'?'}</span>`;
+  const html = `
+    <div class="meta-row">
+      <span class="meta-pill">⭐ <strong>${(meta.stargazers_count||0).toLocaleString()}</strong> stars</span>
+      <span class="meta-pill">🍴 <strong>${(meta.forks_count||0).toLocaleString()}</strong> forks</span>
+      <span class="meta-pill">Difficulty: ${diffBadge}</span>
+      <span class="meta-pill">Language: <strong>${meta.language||'?'}</strong></span>
+    </div>
+    <div class="overview-grid">
+      <div class="card">
+        <div class="card-title">Summary</div>
+        <div class="card-body">${esc(ai.summary||'')}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Architecture</div>
+        <div class="card-body">${esc(ai.architecture||'')}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Tech Stack</div>
+        <div class="tag-list">${(ai.tech_stack||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Key Files</div>
+        <ul class="key-files-list">${(ai.key_files||[]).map(kf=>`<li><div class="kf-path">${esc(kf.path)}</div><div class="kf-role">${esc(kf.role)}</div></li>`).join('')}</ul>
+      </div>
+      <div class="card full">
+        <div class="card-title">Learning Insights</div>
+        ${(ai.learning_insights||[]).map((ins,i)=>`<div class="insight-item"><span class="insight-num">${i+1}.</span>${esc(ins)}</div>`).join('')}
+      </div>
+      <div class="card full">
+        <div class="card-title">AI Rebuild Prompt</div>
+        <div class="rebuild-box">${esc(ai.ai_rebuild_prompt||'')}</div>
+        <button class="copy-prompt-btn" onclick="copyText(${JSON.stringify(ai.ai_rebuild_prompt||'')})">Copy Prompt</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Quick Start</div>
+        <div class="card-body" style="white-space:pre-wrap;font-size:13px;">${esc(ai.quick_start_guide||'')}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Similar Projects</div>
+        <div class="tag-list">${(ai.similar_projects||[]).map(s=>`<span class="tag">${esc(s)}</span>`).join('')}</div>
+        ${ai.fun_fact ? `<div style="margin-top:12px;font-size:13px;color:var(--muted);"><strong>Fun fact:</strong> ${esc(ai.fun_fact)}</div>` : ''}
+      </div>
+    </div>`;
+  document.getElementById('overview-content').innerHTML = html;
 }
 
-function downloadResult() {
-  const ext = currentFormat === 'json' ? 'json' : currentFormat === 'plain' ? 'txt' : 'md';
-  const filename = `repo-xray-${lastRepo.replace('/', '_')}.${ext}`;
-  const blob = new Blob([lastOutput], { type: 'text/plain' });
+function renderSecurity(sec) {
+  if (!sec) { document.getElementById('security-content').innerHTML = `<div class="empty-state">Run in Static or Full mode to see security findings.</div>`; return; }
+  const sevOrder = { critical:0, high:1, medium:2, low:3 };
+  const sorted = [...sec.findings].sort((a,b) => (sevOrder[a.severity]||9)-(sevOrder[b.severity]||9));
+  const rows = sorted.slice(0,50).map(f => `
+    <tr>
+      <td><span class="sev-${f.severity}">${f.severity.toUpperCase()}</span></td>
+      <td>${esc(f.category)}</td>
+      <td><span class="file-path">${esc(f.file)}:${f.line}</span></td>
+      <td>${esc(f.description)}</td>
+      <td><span class="snippet-code">${esc(f.snippet)}</span></td>
+    </tr>`).join('');
+  document.getElementById('security-content').innerHTML = `
+    <div class="section-summary">Score: <strong class="${gradeColor(sec.grade)}">${sec.score}/100 (Grade ${sec.grade})</strong> &nbsp;·&nbsp; ${sec.summary}</div>
+    ${sorted.length === 0 ? '<div class="empty-state">No security findings. Great work!</div>' : `
+    <table class="findings-table">
+      <thead><tr><th>Severity</th><th>Category</th><th>Location</th><th>Description</th><th>Snippet</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`}`;
+}
+
+function renderTechDebt(td) {
+  if (!td) { document.getElementById('techdebt-content').innerHTML = `<div class="empty-state">Run in Static or Full mode to see tech debt analysis.</div>`; return; }
+  const statsHtml = `
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${td.totalLoc.toLocaleString()}</div><div class="stat-lbl">Total LOC</div></div>
+      <div class="stat-box"><div class="stat-val">${td.testRatioPct}%</div><div class="stat-lbl">Test Files</div></div>
+      <div class="stat-box"><div class="stat-val">${td.avgFileLoc}</div><div class="stat-lbl">Avg File Lines</div></div>
+      <div class="stat-box"><div class="stat-val">${td.todoCount}</div><div class="stat-lbl">TODOs</div></div>
+    </div>`;
+  const itemsHtml = td.items.length > 0
+    ? `<div class="debt-items">${td.items.map(i=>`<div class="debt-item"><div class="debt-penalty">-${i.penalty}pts</div><div><div class="debt-cat">${esc(i.cat)}</div><div class="debt-val">${esc(i.value)}</div></div></div>`).join('')}</div>`
+    : '<div class="empty-state">No major tech debt detected.</div>';
+  document.getElementById('techdebt-content').innerHTML = `
+    <div class="section-summary">Score: <strong class="${gradeColor(td.grade)}">${td.score}/100 (Grade ${td.grade})</strong> &nbsp;·&nbsp; ${td.summary}</div>
+    ${statsHtml}${itemsHtml}`;
+}
+
+function renderApiSurface(api) {
+  if (!api) { document.getElementById('api-content').innerHTML = `<div class="empty-state">Run in Static or Full mode to see API surface.</div>`; return; }
+  const methodClass = m => ({ GET:'m-get', POST:'m-post', PUT:'m-put', PATCH:'m-patch', DELETE:'m-delete' }[m.toUpperCase()] || 'm-other');
+  const rows = api.endpoints.slice(0,100).map(ep => `
+    <div class="endpoint-row">
+      <span class="method-badge ${methodClass(ep.method)}">${esc(ep.method)}</span>
+      <span class="ep-path">${esc(ep.path)}</span>
+      <span class="ep-meta">${esc(ep.framework)} · ${esc(ep.file)}</span>
+    </div>`).join('');
+  document.getElementById('api-content').innerHTML = `
+    <div class="section-summary">${api.summary}</div>
+    ${api.count === 0 ? '<div class="empty-state">No API endpoints detected.</div>' : `<div class="endpoint-list">${rows}</div>`}`;
+}
+
+function renderDepRisk(dep) {
+  if (!dep) { document.getElementById('deps-content').innerHTML = `<div class="empty-state">Run in Static or Full mode to see dependency risk.</div>`; return; }
+  const riskClass = r => ({ critical:'risk-critical', high:'risk-high', medium:'risk-medium', low:'risk-low' }[r] || '');
+  const items = dep.findings.map(f => `
+    <div class="dep-item">
+      <div class="dep-header">
+        <span class="dep-name">${esc(f.name)}</span>
+        <span class="dep-ver">${esc(f.version||'')}</span>
+        <span class="${riskClass(f.risk)}">${f.risk.toUpperCase()}</span>
+      </div>
+      <div class="dep-reason">${esc(f.reason)}</div>
+    </div>`).join('');
+  document.getElementById('deps-content').innerHTML = `
+    <div class="section-summary">Risk Score: <strong class="${gradeColor(dep.grade)}">${dep.riskScore}/100 (Grade ${dep.grade})</strong> &nbsp;·&nbsp; ${dep.summary}</div>
+    ${dep.findings.length === 0 ? '<div class="empty-state">No risky dependencies found.</div>' : `<div class="dep-items">${items}</div>`}`;
+}
+
+function renderCost(cost) {
+  if (!cost) { document.getElementById('cost-content').innerHTML = `<div class="empty-state">Run in Static or Full mode to see cost estimate.</div>`; return; }
+  const bRows = cost.breakdown.map(b => `<tr><td>${esc(b.category)}</td><td>${b.loc.toLocaleString()}</td><td>${b.hours.toFixed(0)}h</td></tr>`).join('');
+  document.getElementById('cost-content').innerHTML = `
+    <div class="section-summary">${cost.summary} Duration: ~${cost.soloWeeks.toFixed(1)} weeks solo / ~${cost.teamWeeks.toFixed(1)} weeks (3 devs)</div>
+    <div class="cost-hero">
+      <div class="cost-card"><div class="cost-label">Junior ($25/hr)</div><div class="cost-val cost-junior">$${cost.juniorUsd.toLocaleString()}</div><div class="cost-sublabel">${Math.round(cost.effectiveHours)} hours</div></div>
+      <div class="cost-card"><div class="cost-label">Senior ($90/hr)</div><div class="cost-val cost-senior">$${cost.seniorUsd.toLocaleString()}</div><div class="cost-sublabel">${Math.round(cost.effectiveHours)} hours</div></div>
+      <div class="cost-card"><div class="cost-label">Agency ($200/hr)</div><div class="cost-val cost-agency">$${cost.agencyUsd.toLocaleString()}</div><div class="cost-sublabel">${Math.round(cost.effectiveHours)} hours</div></div>
+    </div>
+    <table class="cost-breakdown">
+      <thead><tr><th>Category</th><th>LOC</th><th>Eff. Hours</th></tr></thead>
+      <tbody>${bRows}</tbody>
+    </table>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN ANALYSIS FLOW
+// ─────────────────────────────────────────────────────────────────────────────
+async function runAnalysis() {
+  const input = document.getElementById('repo-input').value.trim();
+  if (!input) { alert('Please enter a GitHub repository URL or owner/repo.'); return; }
+
+  const groqKey = localStorage.getItem('rx_groq') || '';
+  const needsAI = currentMode === 'full' || currentMode === 'ai';
+  if (needsAI && !groqKey) {
+    alert('Please add your Groq API key in Settings.\nGet a free key at https://console.groq.com');
+    document.getElementById('settings-panel').classList.add('open');
+    return;
+  }
+
+  // Reset UI
+  document.getElementById('error-wrap').style.display = 'none';
+  document.getElementById('report').style.display = 'none';
+  document.getElementById('progress').style.display = 'block';
+  document.getElementById('analyse-btn').disabled = true;
+  reportData = {};
+  ['step-fetch','step-static','step-ai'].forEach(id => stepSet(id, 'idle'));
+
+  try {
+    const [owner, repo] = parseRepo(input);
+    lastRepo = `${owner}/${repo}`;
+
+    // Step 1: Fetch
+    stepSet('step-fetch', 'active');
+    const repoData = await fetchRepoData(owner, repo);
+    stepSet('step-fetch', 'done');
+
+    // Step 2: Static analysis
+    if (currentMode !== 'ai') {
+      stepSet('step-static', 'active');
+      const security = runSecurityAudit(repoData.files);
+      const techDebt = runTechDebt(repoData.files, repoData.tree);
+      const apiSurface = runApiSurface(repoData.files);
+      const depRisk = runDepRisk(repoData.files);
+      const cost = estimateCost(repoData.files);
+      reportData = { ...reportData, security, techDebt, apiSurface, depRisk, cost };
+      stepSet('step-static', 'done');
+
+      // Show report immediately with static data
+      document.getElementById('progress').style.display = 'none';
+      showReport(repoData, null);
+    } else {
+      stepSet('step-static', 'skip');
+    }
+
+    // Step 3: AI analysis
+    if (needsAI) {
+      if (currentMode === 'ai') document.getElementById('progress').style.display = 'block';
+      stepSet('step-ai', 'active');
+      const ai = await callGroq(repoData, groqKey);
+      reportData = { ...reportData, ai };
+      stepSet('step-ai', 'done');
+      document.getElementById('progress').style.display = 'none';
+      showReport(repoData, ai);
+    } else {
+      stepSet('step-ai', 'skip');
+    }
+
+  } catch(e) {
+    document.getElementById('progress').style.display = 'none';
+    showError('Error: ' + e.message);
+  } finally {
+    document.getElementById('analyse-btn').disabled = false;
+  }
+}
+
+function showReport(repoData, ai) {
+  const rd = reportData;
+  document.getElementById('report-title').textContent = lastRepo;
+  document.getElementById('report-badge').textContent = `${repoData.files.length} files · ${(repoData.meta.stargazers_count||0).toLocaleString()} stars`;
+  document.getElementById('report').style.display = 'block';
+  renderScoreRibbon(rd);
+  renderOverview(ai || rd.ai || null, repoData);
+  renderSecurity(rd.security);
+  renderTechDebt(rd.techDebt);
+  renderApiSurface(rd.apiSurface);
+  renderDepRisk(rd.depRisk);
+  renderCost(rd.cost);
+  document.getElementById('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOWNLOAD HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function downloadJSON() {
+  const slug = lastRepo.replace('/','-');
+  download(`repo-xray-${slug}.json`, JSON.stringify(reportData, null, 2), 'application/json');
+}
+function downloadMarkdown() {
+  const slug = lastRepo.replace('/','-');
+  const ai = reportData.ai || {};
+  const sec = reportData.security || {};
+  const td = reportData.techDebt || {};
+  const cost = reportData.cost || {};
+  const md = [
+    `# repo-xray: ${lastRepo}`, '',
+    `## Summary`, ai.summary || '—', '',
+    `## Tech Stack`, (ai.tech_stack||[]).map(t=>`- \`${t}\``).join('\n'), '',
+    `## Security Score: ${sec.score||'?'}/100 (${sec.grade||'?'})`, sec.summary||'', '',
+    `## Tech Debt Score: ${td.score||'?'}/100 (${td.grade||'?'})`, td.summary||'', '',
+    `## Rebuild Cost`, cost.summary||'', `Junior: $${(cost.juniorUsd||0).toLocaleString()} | Senior: $${(cost.seniorUsd||0).toLocaleString()} | Agency: $${(cost.agencyUsd||0).toLocaleString()}`, '',
+    `## AI Rebuild Prompt`, '```', ai.ai_rebuild_prompt||'', '```', '',
+    `*Generated by repo-xray*`,
+  ].join('\n');
+  download(`repo-xray-${slug}.md`, md, 'text/markdown');
+}
+function download(name, content, type) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
   a.click();
 }
+function copyText(t) {
+  navigator.clipboard.writeText(t).catch(() => {});
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
-// Keyboard shortcut
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYBOARD SHORTCUT
+// ─────────────────────────────────────────────────────────────────────────────
 document.getElementById('repo-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') runAnalysis();
 });
-
-// Restore saved key
-const savedKey = localStorage.getItem('rx_groq_key');
-if (savedKey) document.getElementById('groq-key-input').value = savedKey;
+document.addEventListener('click', e => {
+  const panel = document.getElementById('settings-panel');
+  if (panel.classList.contains('open') && !panel.contains(e.target) && !e.target.closest('.settings-btn')) {
+    panel.classList.remove('open');
+  }
+});
 </script>
 </body>
 </html>

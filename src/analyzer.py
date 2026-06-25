@@ -1,6 +1,10 @@
 """
 AI analysis engine.
 Groq (llama-3.3-70b-versatile) primary — HuggingFace router fallback.
+
+Modes:
+  ai       — AI-only analysis (original behaviour)
+  full     — AI + all static modules combined into one report
 """
 
 import json
@@ -161,3 +165,53 @@ def analyse(
         return json.loads(content)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Could not parse AI response as JSON: {e}\nRaw:\n{content[:500]}") from e
+
+
+def analyse_full(
+    repo: RepoData,
+    groq_api_key: Optional[str] = None,
+    hf_api_key: Optional[str] = None,
+    verbose: bool = False,
+) -> dict:
+    """
+    Full analysis: runs all static modules + AI analysis in one pass.
+    Returns merged dict with keys from all modules.
+    """
+    from .security_audit import audit_security
+    from .tech_debt import score_tech_debt
+    from .api_surface import extract_api_surface
+    from .dep_risk import analyse_dependencies
+    from .cost_estimator import estimate_cost
+
+    if verbose:
+        print("  [static] Security audit...")
+    security = audit_security(repo)
+
+    if verbose:
+        print("  [static] Tech debt scoring...")
+    tech_debt = score_tech_debt(repo)
+
+    if verbose:
+        print("  [static] API surface extraction...")
+    api_surface = extract_api_surface(repo)
+
+    if verbose:
+        print("  [static] Dependency risk analysis...")
+    dep_risk = analyse_dependencies(repo)
+
+    if verbose:
+        print("  [static] Cost estimation...")
+    cost = estimate_cost(repo)
+
+    if verbose:
+        print("  [AI] Running AI analysis...")
+    ai = analyse(repo, groq_api_key=groq_api_key, hf_api_key=hf_api_key, verbose=verbose)
+
+    return {
+        **ai,
+        "security": security.as_dict(),
+        "tech_debt": tech_debt.as_dict(),
+        "api_surface": api_surface.as_dict(),
+        "dep_risk": dep_risk.as_dict(),
+        "cost": cost.as_dict(),
+    }
