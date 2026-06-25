@@ -1,0 +1,5 @@
+# repo-xray has NO runtime dependencies — stdlib only
+# (urllib, json, base64, argparse, dataclasses, re, os, sys)
+
+# Dev / testing only
+pytest>=8.0

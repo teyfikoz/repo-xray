@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>repo-xray — Reverse-engineer any GitHub repo</title>
+<style>
+  :root {
+    --bg: #fffdf8;
+    --surface: #ffffff;
+    --border: #e8e4dc;
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --green: #16a34a;
+    --yellow: #d97706;
+    --red: #dc2626;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.6; }
+
+  /* Header */
+  header { border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .tagline { color: var(--muted); font-size: 14px; margin-left: auto; }
+
+  /* Hero */
+  .hero { text-align: center; padding: 60px 24px 40px; max-width: 700px; margin: 0 auto; }
+  .hero h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 800; letter-spacing: -1px; line-height: 1.15; }
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero p { color: var(--muted); margin-top: 12px; font-size: 16px; }
+
+  /* Search box */
+  .search-wrap { max-width: 680px; margin: 36px auto 0; padding: 0 24px; }
+  .search-box { display: flex; gap: 10px; background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius); padding: 6px 6px 6px 16px; transition: border-color 0.2s; }
+  .search-box:focus-within { border-color: var(--accent); }
+  .search-box input { flex: 1; border: none; outline: none; font-size: 16px; background: transparent; font-family: var(--mono); }
+  .search-box input::placeholder { color: #9ca3af; font-family: var(--font); }
+  .search-box button { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 10px 20px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
+  .search-box button:hover { background: #1d4ed8; }
+  .search-box button:disabled { background: #9ca3af; cursor: not-allowed; }
+
+  /* Format selector */
+  .format-row { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .format-btn { padding: 6px 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; cursor: pointer; transition: all 0.15s; color: var(--muted); }
+  .format-btn.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+  /* API key note */
+  .key-note { max-width: 680px; margin: 16px auto 0; padding: 0 24px; }
+  .key-note details { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; font-size: 14px; }
+  .key-note summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+  .key-note input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-top: 10px; font-family: var(--mono); }
+  .key-note a { color: var(--accent); }
+
+  /* Examples */
+  .examples { max-width: 680px; margin: 20px auto 0; padding: 0 24px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .ex-label { font-size: 13px; color: var(--muted); align-self: center; margin-right: 4px; }
+  .ex-chip { padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; cursor: pointer; font-family: var(--mono); transition: border-color 0.15s; }
+  .ex-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Progress */
+  #progress { display: none; max-width: 680px; margin: 24px auto 0; padding: 0 24px; }
+  .progress-inner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+  .progress-step { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; color: var(--muted); }
+  .progress-step.active { color: var(--text); font-weight: 600; }
+  .progress-step.done { color: var(--green); }
+  .step-icon { width: 22px; text-align: center; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #e5e7eb; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Result */
+  #result { display: none; max-width: 960px; margin: 32px auto 60px; padding: 0 24px; }
+  .result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .result-header h2 { font-size: 18px; font-weight: 700; }
+  .copy-btn { margin-left: auto; padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; cursor: pointer; font-weight: 500; transition: background 0.15s; }
+  .copy-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
+  .download-btn { padding: 7px 16px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; }
+  .download-btn:hover { background: #1d4ed8; }
+
+  /* Markdown result */
+  #result-content { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 32px; font-size: 15px; }
+  #result-content h1, #result-content h2, #result-content h3 { margin: 24px 0 10px; line-height: 1.3; }
+  #result-content h1 { font-size: 22px; border-bottom: 2px solid var(--border); padding-bottom: 8px; }
+  #result-content h2 { font-size: 18px; }
+  #result-content p { margin: 10px 0; }
+  #result-content ul, #result-content ol { padding-left: 22px; margin: 10px 0; }
+  #result-content li { margin: 4px 0; }
+  #result-content code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: var(--mono); font-size: 13px; }
+  #result-content pre { background: #1e293b; color: #e2e8f0; border-radius: 10px; padding: 20px; overflow-x: auto; margin: 16px 0; }
+  #result-content pre code { background: none; color: inherit; padding: 0; }
+  #result-content blockquote { border-left: 4px solid var(--accent); margin: 16px 0; padding: 10px 16px; background: var(--accent-light); border-radius: 0 8px 8px 0; color: var(--muted); }
+  #result-content hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+  #result-content a { color: var(--accent); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: var(--green); }
+  .badge-yellow { background: #fef9c3; color: var(--yellow); }
+  .badge-red { background: #fee2e2; color: var(--red); }
+
+  /* Error */
+  #error { display: none; max-width: 680px; margin: 24px auto 0; padding: 0 24px; }
+  .error-box { background: #fee2e2; border: 1px solid #fca5a5; border-radius: var(--radius); padding: 16px 20px; color: var(--red); font-size: 14px; }
+
+  /* Footer */
+  footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 40px; }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">repo<span>-xray</span></div>
+  <div class="tagline">Reverse-engineer any GitHub repo</div>
+</header>
+
+<div class="hero">
+  <h1>Understand <em>any</em> GitHub repository<br>in 60 seconds</h1>
+  <p>AI-powered analysis — architecture, tech stack, rebuild prompt, and learning insights.</p>
+</div>
+
+<div class="search-wrap">
+  <div class="search-box">
+    <input type="text" id="repo-input" placeholder="github.com/owner/repo or owner/repo" autocomplete="off" spellcheck="false">
+    <button id="analyse-btn" onclick="runAnalysis()">Analyse</button>
+  </div>
+</div>
+
+<div class="format-row">
+  <button class="format-btn active" data-fmt="markdown" onclick="setFormat(this)">Markdown</button>
+  <button class="format-btn" data-fmt="json" onclick="setFormat(this)">JSON</button>
+  <button class="format-btn" data-fmt="plain" onclick="setFormat(this)">Plain text</button>
+</div>
+
+<div class="key-note">
+  <details id="key-details">
+    <summary>API Key required — click to configure</summary>
+    <p style="margin-top:10px; color:var(--muted); font-size:13px;">
+      Get a free key at <a href="https://console.groq.com" target="_blank">console.groq.com</a> — no credit card needed.
+    </p>
+    <input type="password" id="groq-key-input" placeholder="gsk_..." autocomplete="off">
+  </details>
+</div>
+
+<div class="examples">
+  <span class="ex-label">Try:</span>
+  <span class="ex-chip" onclick="setExample('fastapi/fastapi')">fastapi/fastapi</span>
+  <span class="ex-chip" onclick="setExample('vercel/next.js')">vercel/next.js</span>
+  <span class="ex-chip" onclick="setExample('supabase/supabase')">supabase/supabase</span>
+  <span class="ex-chip" onclick="setExample('django/django')">django/django</span>
+  <span class="ex-chip" onclick="setExample('expressjs/express')">expressjs/express</span>
+</div>
+
+<div id="progress">
+  <div class="progress-inner">
+    <div class="progress-step" id="step1"><span class="step-icon">⏳</span> Fetching repository files...</div>
+    <div class="progress-step" id="step2"><span class="step-icon">⏳</span> Running AI analysis...</div>
+    <div class="progress-step" id="step3"><span class="step-icon">⏳</span> Formatting report...</div>
+  </div>
+</div>
+
+<div id="error">
+  <div class="error-box" id="error-text"></div>
+</div>
+
+<div id="result">
+  <div class="result-header">
+    <h2 id="result-title">Report</h2>
+    <button class="copy-btn" onclick="copyResult()">Copy</button>
+    <button class="download-btn" onclick="downloadResult()">Download</button>
+  </div>
+  <div id="result-content"></div>
+</div>
+
+<footer>
+  <a href="https://github.com/teyfikoz/repo-xray" target="_blank">repo-xray</a> &nbsp;|&nbsp;
+  Powered by Groq &amp; Llama 3.3 70B &nbsp;|&nbsp;
+  Open source, MIT license
+</footer>
+
+<script>
+// ─── Simple Markdown parser ────────────────────────────────────────────────
+function renderMarkdown(md) {
+  let html = md
+    // Headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // HR
+    .replace(/^---$/gm, '<hr>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    // Italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Blockquote
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // Lists
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, s => '<ul>' + s + '</ul>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    // Code blocks
+    .replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) =>
+      '<pre><code>' + code.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre>')
+    // Paragraphs (lines not already wrapped)
+    .replace(/^(?!<[a-z]|\s*$)(.+)$/gm, '<p>$1</p>');
+  return html;
+}
+
+// ─── State ─────────────────────────────────────────────────────────────────
+let currentFormat = 'markdown';
+let lastOutput = '';
+let lastRepo = '';
+
+function setFormat(btn) {
+  document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFormat = btn.dataset.fmt;
+}
+
+function setExample(repo) {
+  document.getElementById('repo-input').value = repo;
+  document.getElementById('repo-input').focus();
+}
+
+function stepDone(id) {
+  const el = document.getElementById(id);
+  el.classList.add('done');
+  el.classList.remove('active');
+  el.querySelector('.step-icon').innerHTML = '✅';
+}
+function stepActive(id) {
+  const el = document.getElementById(id);
+  el.classList.add('active');
+  el.querySelector('.step-icon').innerHTML = '<span class="spinner"></span>';
+}
+function stepReset(id) {
+  const el = document.getElementById(id);
+  el.className = 'progress-step';
+  el.querySelector('.step-icon').innerHTML = '⏳';
+}
+
+// ─── Main analysis ─────────────────────────────────────────────────────────
+async function runAnalysis() {
+  const repoInput = document.getElementById('repo-input').value.trim();
+  if (!repoInput) { alert('Please enter a GitHub repository URL or owner/repo.'); return; }
+
+  const groqKey = document.getElementById('groq-key-input').value.trim()
+    || localStorage.getItem('rx_groq_key') || '';
+
+  if (!groqKey) {
+    document.getElementById('key-details').open = true;
+    document.getElementById('groq-key-input').focus();
+    alert('Please enter your Groq API key first.\nGet a free key at https://console.groq.com');
+    return;
+  }
+  // Save key for session
+  localStorage.setItem('rx_groq_key', groqKey);
+
+  // Reset UI
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('progress').style.display = 'block';
+  document.getElementById('analyse-btn').disabled = true;
+  ['step1','step2','step3'].forEach(stepReset);
+
+  try {
+    // Parse owner/repo
+    const [owner, repoName] = parseRepo(repoInput);
+    lastRepo = `${owner}/${repoName}`;
+
+    // Step 1: Fetch repo tree + files via GitHub API
+    stepActive('step1');
+    const repoData = await fetchRepoData(owner, repoName);
+    stepDone('step1');
+
+    // Step 2: AI analysis via Groq
+    stepActive('step2');
+    const analysis = await analyseWithGroq(repoData, groqKey);
+    stepDone('step2');
+
+    // Step 3: Format
+    stepActive('step3');
+    const formatted = formatOutput(repoData, analysis, currentFormat);
+    lastOutput = formatted;
+    stepDone('step3');
+
+    // Show result
+    document.getElementById('progress').style.display = 'none';
+    document.getElementById('result-title').textContent = `Report: ${lastRepo}`;
+    const contentEl = document.getElementById('result-content');
+    if (currentFormat === 'markdown') {
+      contentEl.innerHTML = renderMarkdown(formatted);
+    } else {
+      contentEl.innerHTML = '<pre style="white-space:pre-wrap;font-size:13px;">' +
+        formatted.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</pre>';
+    }
+    document.getElementById('result').style.display = 'block';
+
+  } catch(e) {
+    document.getElementById('progress').style.display = 'none';
+    document.getElementById('error-text').textContent = 'Error: ' + e.message;
+    document.getElementById('error').style.display = 'block';
+  } finally {
+    document.getElementById('analyse-btn').disabled = false;
+  }
+}
+
+function parseRepo(input) {
+  input = input.trim().replace(/\/+$/, '');
+  const match = input.match(/github\.com[:/]?([^/]+)\/([^/.\s]+)/);
+  if (match) return [match[1], match[2].replace('.git', '')];
+  const parts = input.split('/').filter(Boolean);
+  if (parts.length >= 2) return [parts[parts.length - 2], parts[parts.length - 1]];
+  throw new Error(`Cannot parse GitHub URL: ${input}`);
+}
+
+async function fetchRepoData(owner, repo) {
+  const BASE = 'https://api.github.com';
+  const h = { 'Accept': 'application/vnd.github+json', 'User-Agent': 'repo-xray/1.0' };
+
+  const [meta, treeData, readmeMeta] = await Promise.all([
+    fetch(`${BASE}/repos/${owner}/${repo}`, {headers:h}).then(r => r.ok ? r.json() : Promise.reject('Repo not found or private')),
+    fetch(`${BASE}/repos/${owner}/${repo}/git/trees/HEAD?recursive=1`, {headers:h}).then(r => r.ok ? r.json() : {tree:[]}),
+    fetch(`${BASE}/repos/${owner}/${repo}/readme`, {headers:h}).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+
+  let readme = '';
+  if (readmeMeta?.content) {
+    try { readme = atob(readmeMeta.content.replace(/\n/g,'')).slice(0, 2000); } catch {}
+  }
+
+  // Filter files
+  const SKIP = new Set(['node_modules','.git','dist','build','__pycache__','.next','vendor','venv','.venv']);
+  const SRC_EXT = new Set(['.py','.js','.ts','.tsx','.jsx','.go','.rs','.java','.kt','.swift','.c','.cpp','.h','.cs','.rb','.php','.vue','.svelte','.html','.css','.scss','.sql','.sh','.yaml','.yml','.toml','.json','.md','.prisma','.graphql']);
+  const candidates = (treeData.tree||[]).filter(f => {
+    if (f.type !== 'blob' || f.size > 100000) return false;
+    const parts = f.path.split('/');
+    if (parts.slice(0,-1).some(p => SKIP.has(p))) return false;
+    const name = parts[parts.length-1].toLowerCase();
+    if (['readme.md','dockerfile','makefile','.env.example'].includes(name)) return true;
+    const ext = name.includes('.') ? '.' + name.split('.').pop() : '';
+    return SRC_EXT.has(ext);
+  }).sort((a,b) => a.path.split('/').length - b.path.split('/').length || a.size - b.size).slice(0, 40);
+
+  // Fetch up to 20 files
+  const MAX_FILES = 20, MAX_CHARS = 40000;
+  let totalChars = 0;
+  const files = [];
+  for (const item of candidates) {
+    if (files.length >= MAX_FILES || totalChars >= MAX_CHARS) break;
+    try {
+      const raw = await fetch(
+        `https://raw.githubusercontent.com/${owner}/${repo}/${meta.default_branch||'main'}/${item.path}`
+      );
+      if (!raw.ok) continue;
+      let content = await raw.text();
+      if (content.length > 3000) content = content.slice(0,3000) + '\n... [truncated]';
+      files.push({ path: item.path, content });
+      totalChars += content.length;
+    } catch {}
+  }
+
+  return { owner, repo, meta, readme, files };
+}
+
+async function analyseWithGroq(repoData, apiKey) {
+  const {owner, repo, meta, readme, files} = repoData;
+
+  let context = `# Repository: ${owner}/${repo}\n`;
+  context += `Description: ${meta.description || 'none'}\n`;
+  context += `Language: ${meta.language || 'unknown'} | Stars: ${(meta.stargazers_count||0).toLocaleString()} | Forks: ${(meta.forks_count||0).toLocaleString()}\n`;
+  context += `Topics: ${(meta.topics||[]).join(', ') || 'none'}\n\n`;
+  if (readme) context += `## README\n${readme}\n\n`;
+  context += `## Source Files (${files.length})\n`;
+  for (const f of files) {
+    context += `\n### ${f.path}\n\`\`\`\n${f.content}\n\`\`\`\n`;
+  }
+
+  const systemPrompt = `You are an expert software architect and technical educator. Analyse GitHub repositories and produce clear, insightful JSON reports. Be concise and precise.`;
+  const userPrompt = `Analyse this repository and return ONLY a valid JSON object with these keys:
+{
+  "summary": "2-3 sentence plain-English description",
+  "tech_stack": ["list of technologies/frameworks"],
+  "architecture": "2-3 sentences on architecture pattern",
+  "key_files": [{"path": "...", "role": "one sentence"}],
+  "difficulty": "beginner|intermediate|advanced",
+  "learning_insights": ["insight 1", "insight 2", "insight 3"],
+  "ai_rebuild_prompt": "Detailed prompt to recreate this project from scratch",
+  "quick_start_guide": "Step-by-step setup instructions",
+  "similar_projects": ["related project or library names"],
+  "fun_fact": "One surprising fact about this codebase or tech"
+}
+Return ONLY JSON. No markdown fences.
+
+REPOSITORY:
+${context}`;
+
+  const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 4096,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Groq API error ${resp.status}`);
+  }
+
+  const data = await resp.json();
+  let content = data.choices[0].message.content.trim();
+  if (content.startsWith('```')) {
+    content = content.split('```')[1].replace(/^json/, '').trim();
+    content = content.split('```')[0].trim();
+  }
+  return JSON.parse(content);
+}
+
+function formatOutput(repoData, analysis, format) {
+  const {owner, repo, meta} = repoData;
+  const fullName = `${owner}/${repo}`;
+  const stars = (meta.stargazers_count||0).toLocaleString();
+  const forks = (meta.forks_count||0).toLocaleString();
+
+  if (format === 'json') {
+    return JSON.stringify(analysis, null, 2);
+  }
+  if (format === 'plain') {
+    const lines = [
+      '='.repeat(60),
+      `REPO-XRAY REPORT: ${fullName}`,
+      '='.repeat(60), '',
+      'SUMMARY', '-'.repeat(40), analysis.summary||'', '',
+      `TECH STACK: ${(analysis.tech_stack||[]).join(', ')}`,
+      `DIFFICULTY: ${(analysis.difficulty||'').toUpperCase()}`,
+      `STARS: ${stars} | FORKS: ${forks}`, '',
+      'ARCHITECTURE', '-'.repeat(40), analysis.architecture||'', '',
+      'LEARNING INSIGHTS', '-'.repeat(40),
+      ...(analysis.learning_insights||[]).map((ins, i) => `${i+1}. ${ins}`), '',
+      'AI REBUILD PROMPT', '-'.repeat(40), analysis.ai_rebuild_prompt||'', '',
+      'QUICK START', '-'.repeat(40), analysis.quick_start_guide||'', '',
+      `FUN FACT: ${analysis.fun_fact||''}`, '',
+      '='.repeat(60),
+    ];
+    return lines.join('\n');
+  }
+
+  // Markdown
+  const diffEmoji = {beginner:'🟢', intermediate:'🟡', advanced:'🔴'}[analysis.difficulty?.toLowerCase()] || '⚪';
+  const lines = [
+    `# repo-xray report: [${fullName}](https://github.com/${fullName})`, '',
+    `> ⭐ ${stars} stars  |  🍴 ${forks} forks  |  ${diffEmoji} ${(analysis.difficulty||'').charAt(0).toUpperCase()+(analysis.difficulty||'').slice(1)}`, '',
+    '---', '',
+    '## What is this?', '', analysis.summary||'', '',
+    '## Tech Stack', '',
+    ...(analysis.tech_stack||[]).map(t => `- \`${t}\``), '',
+    '## Architecture', '', analysis.architecture||'', '',
+    '## Key Files', '',
+    ...(analysis.key_files||[]).map(kf => `- **\`${kf.path}\`** — ${kf.role}`), '',
+    '## Learning Insights', '',
+    ...(analysis.learning_insights||[]).flatMap((ins,i) => [`**${i+1}.** ${ins}`, '']),
+    '## AI Rebuild Prompt', '',
+    '> Copy this prompt into any AI coding agent to recreate the project.', '',
+    '```', analysis.ai_rebuild_prompt||'', '```', '',
+    '## Quick Start Guide', '', analysis.quick_start_guide||'', '',
+    '## Explore More', '',
+    ...(analysis.similar_projects||[]).map(s => `- ${s}`), '',
+    '---', '',
+    `**Fun fact:** ${analysis.fun_fact||''}`, '',
+    `*Generated by [repo-xray](https://github.com/teyfikoz/repo-xray)*`,
+  ];
+  return lines.join('\n');
+}
+
+function copyResult() {
+  navigator.clipboard.writeText(lastOutput).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  });
+}
+
+function downloadResult() {
+  const ext = currentFormat === 'json' ? 'json' : currentFormat === 'plain' ? 'txt' : 'md';
+  const filename = `repo-xray-${lastRepo.replace('/', '_')}.${ext}`;
+  const blob = new Blob([lastOutput], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+// Keyboard shortcut
+document.getElementById('repo-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runAnalysis();
+});
+
+// Restore saved key
+const savedKey = localStorage.getItem('rx_groq_key');
+if (savedKey) document.getElementById('groq-key-input').value = savedKey;
+</script>
+</body>
+</html>
