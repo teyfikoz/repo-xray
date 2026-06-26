@@ -88,6 +88,148 @@ def _print_cost(result: dict) -> None:
     print()
 
 
+def _print_license(result: dict) -> None:
+    lic = result.get("license_risk") or {}
+    print(f"\n{'='*60}")
+    print(f"LICENSE RISK — {lic.get('detected_license', 'Unknown')} (Grade {lic.get('grade', '?')})")
+    print(f"{'='*60}")
+    print(lic.get("summary", ""))
+    print(f"\n  {lic.get('advice', '')}")
+    for sig in lic.get("signals", []):
+        print(f"  • {sig}")
+    if lic.get("source_file"):
+        print(f"\n  Detected from: {lic['source_file']}")
+    print()
+
+
+def _print_readme(result: dict) -> None:
+    r = result.get("readme_quality") or {}
+    print(f"\n{'='*60}")
+    print(f"README QUALITY — Score: {r.get('score', '?')}/100 (Grade {r.get('grade', '?')})")
+    print(f"{'='*60}")
+    print(r.get("summary", ""))
+    print(f"\n  Word count: {r.get('word_count', 0):,}")
+    found = r.get("sections_found", [])
+    missing = r.get("missing_sections", [])
+    if found:
+        print(f"  Sections found: {', '.join(found)}")
+    if missing:
+        print(f"  Missing sections: {', '.join(missing)}")
+    for sig in r.get("signals", [])[:5]:
+        print(f"  • {sig}")
+    print()
+
+
+def _print_code_quality(result: dict) -> None:
+    cq = result.get("code_quality") or {}
+    print(f"\n{'='*60}")
+    print(f"CODE QUALITY — Score: {cq.get('score', '?')}/100 (Grade {cq.get('grade', '?')})")
+    print(f"{'='*60}")
+    print(cq.get("summary", ""))
+    print(f"\n  Files: {cq.get('source_files', 0)} source / {cq.get('test_files', 0)} test")
+    print(f"  Lines: {cq.get('total_lines', 0):,} total, avg {cq.get('avg_file_size', 0)} lines/file")
+    print(f"  Test ratio: {cq.get('test_ratio', 0):.0%} | Doc coverage: {cq.get('doc_coverage', 0):.0%}")
+    print(f"  Long functions: {cq.get('long_functions', 0)} | Large files: {cq.get('large_files', 0)} | TODOs: {cq.get('todo_count', 0)}")
+    for smell in cq.get("smells", []):
+        print(f"  ⚠  {smell}")
+    print()
+
+
+def _print_ci(result: dict) -> None:
+    ci = result.get("ci") or {}
+    print(f"\n{'='*60}")
+    print(f"CI/CD ANALYSIS — Score: {ci.get('score', '?')}/100 (Grade {ci.get('grade', '?')})")
+    print(f"{'='*60}")
+    print(ci.get("summary", ""))
+    providers = ci.get("ci_providers", [])
+    if providers:
+        print(f"\n  CI providers: {', '.join(providers)}")
+    features = []
+    if ci.get("has_tests_in_ci"):
+        features.append("tests")
+    if ci.get("has_lint_in_ci"):
+        features.append("lint")
+    if ci.get("has_security_scan"):
+        features.append("security scan")
+    if ci.get("has_caching"):
+        features.append("caching")
+    if features:
+        print(f"  CI features: {', '.join(features)}")
+    for issue in ci.get("dockerfile_issues", [])[:5]:
+        print(f"  [Dockerfile] {issue}")
+    for issue in ci.get("workflow_issues", [])[:5]:
+        print(f"  [Workflow]   {issue}")
+    print()
+
+
+def _print_monetization(result: dict) -> None:
+    m = result.get("monetization") or {}
+    print(f"\n{'='*60}")
+    print(f"MONETIZATION POTENTIAL — Score: {m.get('score', '?')}/100 (Grade {m.get('grade', '?')})")
+    print(f"{'='*60}")
+    print(m.get("summary", ""))
+    print(f"\n  Category: {m.get('category', 'unknown')} | SaaS readiness: {m.get('saas_readiness', 0)}/10")
+    models = m.get("monetization_models", [])
+    if models:
+        print(f"\n  Recommended models:")
+        for i, model in enumerate(models[:4], 1):
+            print(f"    {i}. {model}")
+    recs = m.get("recommendations", [])
+    if recs:
+        print(f"\n  Action items:")
+        for rec in recs[:3]:
+            print(f"  → {rec}")
+    print()
+
+
+def _print_deployment(result: dict) -> None:
+    d = result.get("deployment") or {}
+    print(f"\n{'='*60}")
+    print(f"DEPLOYMENT DETECTION")
+    print(f"{'='*60}")
+    print(d.get("summary", ""))
+    platforms = d.get("platforms", [])
+    if platforms:
+        print(f"\n  Detected: {', '.join(platforms)}")
+    flags = []
+    if d.get("container_ready"):
+        flags.append("container-ready")
+    if d.get("serverless_ready"):
+        flags.append("serverless-ready")
+    if d.get("edge_ready"):
+        flags.append("edge-ready")
+    if flags:
+        print(f"  Capabilities: {', '.join(flags)}")
+    for missing in d.get("missing_configs", []):
+        print(f"  • Missing: {missing}")
+    print()
+
+
+def _print_migration(result: dict) -> None:
+    mg = result.get("migration") or {}
+    print(f"\n{'='*60}")
+    print(f"MIGRATION ADVISOR")
+    print(f"{'='*60}")
+    print(mg.get("summary", ""))
+    stack = mg.get("current_stack", {})
+    if stack:
+        print(f"\n  Detected stack:")
+        for layer, tech in stack.items():
+            print(f"    {layer}: {tech}")
+    warnings = mg.get("upgrade_warnings", [])
+    if warnings:
+        print(f"\n  Upgrade warnings:")
+        for w in warnings:
+            print(f"  ⚠  {w}")
+    options = mg.get("migration_options", [])
+    if options:
+        print(f"\n  Migration opportunities:")
+        for opt in options[:5]:
+            print(f"  [{opt['priority'].upper():8}] {opt['from']} → {opt['to']} (effort: {opt['effort']})")
+            print(f"              {opt['reason']}")
+    print()
+
+
 def _run_static_only(args, repo) -> dict:
     """Run only static analysis modules (no AI)."""
     from src.security_audit import audit_security
@@ -95,6 +237,13 @@ def _run_static_only(args, repo) -> dict:
     from src.api_surface import extract_api_surface
     from src.dep_risk import analyse_dependencies
     from src.cost_estimator import estimate_cost
+    from src.license_risk import analyse_license
+    from src.readme_quality import analyse_readme
+    from src.code_quality import score_code_quality
+    from src.ci_analyzer import analyse_ci
+    from src.monetization import analyse_monetization
+    from src.deployment_detector import detect_deployment
+    from src.migration_advisor import detect_migration_needs
 
     result: dict = {"mode": args.mode}
 
@@ -123,6 +272,41 @@ def _run_static_only(args, repo) -> dict:
             print("  Estimating cost...")
         result["cost"] = estimate_cost(repo).as_dict()
 
+    if args.mode in ("license", "full"):
+        if args.verbose:
+            print("  Analysing license risk...")
+        result["license_risk"] = analyse_license(repo).as_dict()
+
+    if args.mode in ("readme", "full"):
+        if args.verbose:
+            print("  Scoring README quality...")
+        result["readme_quality"] = analyse_readme(repo).as_dict()
+
+    if args.mode in ("code-quality", "full"):
+        if args.verbose:
+            print("  Analysing code quality...")
+        result["code_quality"] = score_code_quality(repo).as_dict()
+
+    if args.mode in ("ci", "full"):
+        if args.verbose:
+            print("  Analysing CI/CD configuration...")
+        result["ci"] = analyse_ci(repo).as_dict()
+
+    if args.mode in ("monetization", "full"):
+        if args.verbose:
+            print("  Assessing monetization potential...")
+        result["monetization"] = analyse_monetization(repo).as_dict()
+
+    if args.mode in ("deployment", "full"):
+        if args.verbose:
+            print("  Detecting deployment configuration...")
+        result["deployment"] = detect_deployment(repo).as_dict()
+
+    if args.mode in ("migration", "full"):
+        if args.verbose:
+            print("  Running migration advisor...")
+        result["migration"] = detect_migration_needs(repo).as_dict()
+
     return result
 
 
@@ -149,6 +333,13 @@ Modes:
   api-surface  Static API endpoint extractor (FastAPI, Express, Django, Flask, etc.)
   deps         Static dependency risk analysis (abandoned, vulnerable packages)
   cost         Static rebuild cost estimator (LOC-based, market rates)
+  license      Static license risk (MIT/Apache/GPL/AGPL/Proprietary detection)
+  readme       Static README quality scorer (sections, examples, word count)
+  code-quality Static code quality (long functions, duplication, test ratio, smells)
+  ci           Static CI/CD analyzer (Dockerfile best practices, Actions security)
+  monetization Static monetization potential (SaaS readiness, model recommendations)
+  deployment   Static deployment detector (Vercel/Netlify/Railway/Fly/K8s/Docker)
+  migration    Static migration advisor (EOL tech, upgrade paths, effort estimates)
   full         All of the above combined
 
 API Keys (via env vars):
@@ -176,7 +367,11 @@ API Keys (via env vars):
     )
     parser.add_argument(
         "--mode", "-m",
-        choices=["ai", "security", "tech-debt", "api-surface", "deps", "cost", "full"],
+        choices=[
+            "ai", "security", "tech-debt", "api-surface", "deps", "cost",
+            "license", "readme", "code-quality", "ci", "monetization",
+            "deployment", "migration", "full",
+        ],
         default="ai",
         help="Analysis mode (default: ai)",
     )
@@ -220,7 +415,11 @@ API Keys (via env vars):
     gh_token = args.github_token or os.environ.get("GITHUB_TOKEN", "")
 
     # Static-only modes don't need an AI key
-    static_only_modes = {"security", "tech-debt", "api-surface", "deps", "cost"}
+    static_only_modes = {
+        "security", "tech-debt", "api-surface", "deps", "cost",
+        "license", "readme", "code-quality", "ci", "monetization",
+        "deployment", "migration",
+    }
     needs_ai = args.mode not in static_only_modes or args.compare or args.changelog
 
     if needs_ai and not groq_key and not hf_key:
@@ -306,6 +505,20 @@ API Keys (via env vars):
                     _print_dep_risk(result)
                 if "cost" in result:
                     _print_cost(result)
+                if "license_risk" in result:
+                    _print_license(result)
+                if "readme_quality" in result:
+                    _print_readme(result)
+                if "code_quality" in result:
+                    _print_code_quality(result)
+                if "ci" in result:
+                    _print_ci(result)
+                if "monetization" in result:
+                    _print_monetization(result)
+                if "deployment" in result:
+                    _print_deployment(result)
+                if "migration" in result:
+                    _print_migration(result)
                 return
 
         elif args.mode == "full":

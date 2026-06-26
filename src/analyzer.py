@@ -182,6 +182,13 @@ def analyse_full(
     from .api_surface import extract_api_surface
     from .dep_risk import analyse_dependencies
     from .cost_estimator import estimate_cost
+    from .license_risk import analyse_license
+    from .readme_quality import analyse_readme
+    from .code_quality import score_code_quality
+    from .ci_analyzer import analyse_ci
+    from .monetization import analyse_monetization
+    from .deployment_detector import detect_deployment
+    from .migration_advisor import detect_migration_needs
 
     if verbose:
         print("  [static] Security audit...")
@@ -204,6 +211,34 @@ def analyse_full(
     cost = estimate_cost(repo)
 
     if verbose:
+        print("  [static] License risk analysis...")
+    license_risk = analyse_license(repo)
+
+    if verbose:
+        print("  [static] README quality scoring...")
+    readme_quality = analyse_readme(repo)
+
+    if verbose:
+        print("  [static] Code quality analysis...")
+    code_quality = score_code_quality(repo)
+
+    if verbose:
+        print("  [static] CI/CD analysis...")
+    ci = analyse_ci(repo)
+
+    if verbose:
+        print("  [static] Monetization potential...")
+    monetization = analyse_monetization(repo)
+
+    if verbose:
+        print("  [static] Deployment detection...")
+    deployment = detect_deployment(repo)
+
+    if verbose:
+        print("  [static] Migration advisor...")
+    migration = detect_migration_needs(repo)
+
+    if verbose:
         print("  [AI] Running AI analysis...")
     ai = analyse(repo, groq_api_key=groq_api_key, hf_api_key=hf_api_key, verbose=verbose)
 
@@ -214,4 +249,11 @@ def analyse_full(
         "api_surface": api_surface.as_dict(),
         "dep_risk": dep_risk.as_dict(),
         "cost": cost.as_dict(),
+        "license_risk": license_risk.as_dict(),
+        "readme_quality": readme_quality.as_dict(),
+        "code_quality": code_quality.as_dict(),
+        "ci": ci.as_dict(),
+        "monetization": monetization.as_dict(),
+        "deployment": deployment.as_dict(),
+        "migration": migration.as_dict(),
     }
