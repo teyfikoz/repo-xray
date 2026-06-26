@@ -299,6 +299,13 @@ footer a { color: var(--accent); text-decoration: none; }
     <button class="tab-btn" data-tab="api" onclick="switchTab(this)">API Surface</button>
     <button class="tab-btn" data-tab="deps" onclick="switchTab(this)">Dependencies</button>
     <button class="tab-btn" data-tab="cost" onclick="switchTab(this)">Cost</button>
+    <button class="tab-btn" data-tab="license" onclick="switchTab(this)">License</button>
+    <button class="tab-btn" data-tab="readme" onclick="switchTab(this)">README</button>
+    <button class="tab-btn" data-tab="codequality" onclick="switchTab(this)">Code Quality</button>
+    <button class="tab-btn" data-tab="ci" onclick="switchTab(this)">CI/CD</button>
+    <button class="tab-btn" data-tab="monetization" onclick="switchTab(this)">Monetization</button>
+    <button class="tab-btn" data-tab="deployment" onclick="switchTab(this)">Deployment</button>
+    <button class="tab-btn" data-tab="migration" onclick="switchTab(this)">Migration</button>
   </div>
 
   <div class="tab-panel active" id="tab-overview">
@@ -318,6 +325,27 @@ footer a { color: var(--accent); text-decoration: none; }
   </div>
   <div class="tab-panel" id="tab-cost">
     <div id="cost-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Estimating cost…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-license">
+    <div id="license-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Detecting license…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-readme">
+    <div id="readme-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Scoring README…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-codequality">
+    <div id="codequality-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Analysing code quality…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-ci">
+    <div id="ci-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Inspecting CI/CD…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-monetization">
+    <div id="monetization-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Assessing monetization potential…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-deployment">
+    <div id="deployment-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Detecting deployment platforms…</div></div>
+  </div>
+  <div class="tab-panel" id="tab-migration">
+    <div id="migration-content"><div class="ai-loading"><div class="ai-spinner"></div><br>Running migration advisor…</div></div>
   </div>
 </div>
 
@@ -761,6 +789,425 @@ function estimateCost(files) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — LICENSE RISK
+// ─────────────────────────────────────────────────────────────────────────────
+const LICENSE_DB = {
+  'mit':            { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'MIT' },
+  'apache-2.0':     { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'Apache 2.0' },
+  'bsd-2':          { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'BSD 2-Clause' },
+  'bsd-3':          { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'BSD 3-Clause' },
+  'isc':            { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'ISC' },
+  'unlicense':      { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'Unlicense (Public Domain)' },
+  'cc0':            { risk:'safe',       grade:'A', commercial:true,  copyleft:false, label:'CC0 1.0' },
+  'mpl-2.0':        { risk:'notice',     grade:'B', commercial:true,  copyleft:true,  label:'Mozilla Public License 2.0' },
+  'lgpl-2.1':       { risk:'notice',     grade:'B', commercial:true,  copyleft:true,  label:'GNU LGPL 2.1' },
+  'lgpl-3.0':       { risk:'notice',     grade:'B', commercial:true,  copyleft:true,  label:'GNU LGPL 3.0' },
+  'gpl-2.0':        { risk:'caution',    grade:'C', commercial:false, copyleft:true,  label:'GNU GPL 2.0' },
+  'gpl-3.0':        { risk:'caution',    grade:'C', commercial:false, copyleft:true,  label:'GNU GPL 3.0' },
+  'agpl-3.0':       { risk:'restricted', grade:'D', commercial:false, copyleft:true,  label:'GNU AGPL 3.0' },
+  'sspl':           { risk:'restricted', grade:'D', commercial:false, copyleft:true,  label:'Server Side Public License' },
+  'busl':           { risk:'caution',    grade:'C', commercial:false, copyleft:false, label:'Business Source License' },
+  'elastic':        { risk:'caution',    grade:'C', commercial:false, copyleft:false, label:'Elastic License 2.0' },
+  'proprietary':    { risk:'restricted', grade:'F', commercial:false, copyleft:false, label:'Proprietary' },
+  'commons clause': { risk:'restricted', grade:'D', commercial:false, copyleft:false, label:'Commons Clause' },
+  'cc-by-nc':       { risk:'restricted', grade:'D', commercial:false, copyleft:false, label:'Creative Commons BY-NC' },
+};
+const LICENSE_FINGERPRINTS = [
+  ['agpl-3.0',  /gnu affero general public license.*version 3/i],
+  ['gpl-3.0',   /gnu general public license.*version 3/i],
+  ['gpl-2.0',   /gnu general public license.*version 2/i],
+  ['lgpl-3.0',  /gnu lesser general public license.*version 3/i],
+  ['lgpl-2.1',  /gnu lesser general public license.*version 2\.1/i],
+  ['mpl-2.0',   /mozilla public license.*2\.0/i],
+  ['apache-2.0',/apache license.*2\.0|licensed under the apache/i],
+  ['mit',       /permission is hereby granted.*free of charge|mit license/i],
+  ['bsd-3',     /redistributions of source code must retain.*neither the name/i],
+  ['bsd-2',     /redistributions of source code must retain/i],
+  ['isc',       /isc license/i],
+  ['unlicense', /this is free and unencumbered software released into the public domain/i],
+  ['cc0',       /creative commons.*cc0|no copyright/i],
+  ['sspl',      /server side public license/i],
+  ['busl',      /business source license/i],
+  ['elastic',   /elastic license/i],
+  ['commons clause', /commons clause/i],
+  ['proprietary',    /proprietary|confidential.*do not distribute/i],
+  ['cc-by-nc',  /creative commons.*noncommercial|cc by-nc/i],
+];
+const RISK_ADVICE = {
+  safe:       'Permissive license — free to use in commercial products with minimal obligations.',
+  notice:     'Weak copyleft — commercial use OK, but modifications to this library must stay open source.',
+  caution:    'Strong copyleft — distributing this code requires your product to also be open source.',
+  restricted: 'Restricted — SaaS/commercial use prohibited or requires separate commercial license.',
+  unknown:    'License not detected — treat as proprietary or contact the author before commercial use.',
+};
+function runLicenseRisk(files, readme) {
+  let info = null, sourceFile = '';
+  const t = (text) => {
+    const low = text.toLowerCase();
+    for (const [key, re] of LICENSE_FINGERPRINTS) {
+      if (re.test(low)) return LICENSE_DB[key] || null;
+    }
+    return null;
+  };
+  // 1. LICENSE files
+  for (const f of files) {
+    const name = f.path.split('/').pop().toLowerCase();
+    if (/^(license|licence|copying|copyright)(\.[a-z]+)?$/.test(name)) {
+      const found = t(f.content);
+      if (found) { info = found; sourceFile = f.path; break; }
+    }
+  }
+  // 2. package.json
+  if (!info) {
+    for (const f of files) {
+      if (f.path.split('/').pop().toLowerCase() === 'package.json') {
+        try {
+          const pkg = JSON.parse(f.content);
+          const lic = (pkg.license || '').toLowerCase().trim();
+          for (const [key, data] of Object.entries(LICENSE_DB)) {
+            if (key.includes(lic) || lic.includes(key)) { info = data; sourceFile = f.path; break; }
+          }
+        } catch {}
+        break;
+      }
+    }
+  }
+  // 3. README
+  if (!info && readme) { info = t(readme); if (info) sourceFile = 'README'; }
+
+  if (!info) {
+    return { detected: 'Unknown', grade:'?', risk:'unknown', commercial:false, copyleft:false,
+      advice: RISK_ADVICE.unknown, sourceFile:'', signals:['No LICENSE file found'] };
+  }
+  const signals = [];
+  if (info.copyleft) signals.push(`Copyleft — modifications must remain open source`);
+  if (!info.commercial) signals.push('Commercial use restricted — obtain commercial license');
+  if (info.risk === 'safe') signals.push('Permissive — safe for proprietary/commercial use');
+  if (info.label === 'GNU AGPL 3.0') signals.push('AGPL: SaaS/network use also triggers open-source obligation');
+  return { detected: info.label, grade: info.grade, risk: info.risk, commercial: info.commercial,
+    copyleft: info.copyleft, advice: RISK_ADVICE[info.risk], sourceFile, signals };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — README QUALITY
+// ─────────────────────────────────────────────────────────────────────────────
+const README_SECTIONS = [
+  { name:'Installation',    patterns:[/##\s*(instal|getting.started|setup|quick.start)/i],         pts:15 },
+  { name:'Usage',           patterns:[/##\s*(usage|how.to.use)/i],                                  pts:15 },
+  { name:'Examples',        patterns:[/##\s*example|```/i],                                         pts:10 },
+  { name:'API / Docs',      patterns:[/##\s*(api|documentation|reference)/i],                       pts:10 },
+  { name:'Contributing',    patterns:[/##\s*contribut|contributing\.md/i],                          pts:8  },
+  { name:'License section', patterns:[/##\s*licen|licensed under|mit license|apache license/i],      pts:7  },
+  { name:'Screenshots',     patterns:[/!\[.*\]\(.*\.(png|jpg|gif|svg|webp)/i],                      pts:8  },
+  { name:'Demo / Link',     patterns:[/https?:\/\/[^\s]+\.(com|io|app|dev|net)/i],                  pts:5  },
+];
+function runReadmeQuality(files, readme) {
+  let text = readme || '';
+  if (!text) {
+    for (const f of files) {
+      if (/readme(\.[a-z]+)?$/.test(f.path.split('/').pop().toLowerCase())) { text = f.content; break; }
+    }
+  }
+  if (!text.trim()) return { score:0, grade:'F', wordCount:0, sectionsFound:[], missing:['README file'], signals:['No README found'] };
+
+  const wordCount = text.split(/\s+/).length;
+  let score = 5;
+  if (wordCount >= 100) score += 5;
+  if (wordCount >= 300) score += 5;
+  if (wordCount >= 800) score += 5;
+
+  const hasBadges = /!\[.*\]\(https?:\/\/(img\.shields\.io|codecov|travis|github\.com\/.*badge)/i.test(text);
+  if (hasBadges) score += 5;
+
+  const sectionsFound = [], missing = [], signals = [`Word count: ${wordCount.toLocaleString()}`];
+  for (const { name, patterns, pts } of README_SECTIONS) {
+    const found = patterns.some(re => re.test(text));
+    if (found) { score += pts; sectionsFound.push(name); }
+    else missing.push(name);
+  }
+
+  const codeBlocks = (text.match(/```/g) || []).length;
+  if (codeBlocks === 0) { signals.push('No code blocks — add examples'); score -= 5; }
+  else signals.push(`${codeBlocks/2|0} code block(s)`);
+
+  const headings = (text.match(/^#{1,3}\s/gm) || []).length;
+  if (headings === 0) { signals.push('No markdown headings — wall of text'); score -= 5; }
+  else signals.push(`${headings} headings`);
+
+  score = Math.max(0, Math.min(100, score));
+  const grade = score>=85?'A':score>=70?'B':score>=55?'C':score>=40?'D':'F';
+  if (hasBadges) signals.push('Status badges present');
+  return { score, grade, wordCount, sectionsFound, missing, hasBadges, signals };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — CODE QUALITY
+// ─────────────────────────────────────────────────────────────────────────────
+const SRC_EXTS = new Set(['.py','.js','.ts','.tsx','.jsx','.go','.rs','.java','.kt','.swift','.c','.cpp','.cs','.rb','.php']);
+const TEST_RE = /\/(test_|_test\.|spec\.|\.test\.|\.spec\.|tests\/|__tests__\/|test\/)/i;
+function runCodeQuality(files) {
+  const srcFiles = files.filter(f => { const e = f.path.includes('.') ? '.'+f.path.split('.').pop().toLowerCase() : ''; return SRC_EXTS.has(e); });
+  const testFiles = srcFiles.filter(f => TEST_RE.test(f.path));
+  const nonTest = srcFiles.filter(f => !TEST_RE.test(f.path));
+  if (!srcFiles.length) return { score:50, grade:'C', totalLines:0, sourceFiles:0, testFiles:0, testRatio:0, longFunctions:0, largeFiles:0, todoCount:0, fixmeCount:0, smells:[], signals:['No source files detected'] };
+
+  const totalLines = srcFiles.reduce((s,f) => s + f.content.split('\n').length, 0);
+  const allContent = srcFiles.map(f=>f.content).join('\n');
+  const testRatio = nonTest.length ? testFiles.length / nonTest.length : 0;
+  const longFunctions = nonTest.reduce((count, f) => {
+    const lines = f.content.split('\n');
+    const starts = lines.reduce((acc,l,i) => /^\s*(def |function |async function |func |fn )\w/.test(l) ? [...acc,i] : acc, []);
+    return count + starts.filter((s,i) => (starts[i+1]||lines.length) - s > 50).length;
+  }, 0);
+  const largeFiles = srcFiles.filter(f => f.content.split('\n').length > 500).length;
+  const todoCount = (allContent.match(/\bTODO\b/gi)||[]).length;
+  const fixmeCount = (allContent.match(/\bFIXME\b/gi)||[]).length;
+
+  const smells = [], signals = [];
+  let score = 100;
+  if (testRatio === 0) { score -= 20; smells.push('No test files found'); }
+  else if (testRatio < 0.2) { score -= 10; smells.push(`Low test ratio (${(testRatio*100).toFixed(0)}%)`); }
+  else signals.push(`Test ratio: ${(testRatio*100).toFixed(0)}%`);
+  if (longFunctions > 10) { score -= 15; smells.push(`${longFunctions} long functions (>50 lines)`); }
+  else if (longFunctions > 3) { score -= 7; signals.push(`${longFunctions} long function(s)`); }
+  if (largeFiles > 5) { score -= 10; smells.push(`${largeFiles} large files (>500 lines)`); }
+  else if (largeFiles) { score -= 4; signals.push(`${largeFiles} large file(s)`); }
+  if (todoCount + fixmeCount > 20) { score -= 8; smells.push(`${todoCount} TODOs + ${fixmeCount} FIXMEs`); }
+  else if (todoCount + fixmeCount > 5) signals.push(`${todoCount} TODOs / ${fixmeCount} FIXMEs`);
+  signals.push(`${srcFiles.length} source files, ${totalLines.toLocaleString()} total lines`);
+
+  score = Math.max(0, Math.min(100, score));
+  const grade = score>=85?'A':score>=70?'B':score>=55?'C':score>=40?'D':'F';
+  return { score, grade, totalLines, sourceFiles: srcFiles.length, testFiles: testFiles.length, testRatio, longFunctions, largeFiles, todoCount, fixmeCount, smells, signals };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — CI/CD ANALYZER
+// ─────────────────────────────────────────────────────────────────────────────
+function runCIAnalyzer(files, tree) {
+  const paths = (tree||[]).map(n=>n.path||'').concat(files.map(f=>f.path));
+  const allContent = files.map(f=>f.content).join('\n').toLowerCase();
+  const ciProviders = [], issues = [];
+
+  const hasPath = (pat) => paths.some(p => pat.test(p));
+  const hasContent = (pat) => pat.test(allContent);
+
+  const hasGHActions = hasPath(/\.github\/workflows\/.+\.ya?ml$/i);
+  const hasTravis    = hasPath(/\.travis\.ya?ml$/i);
+  const hasCircle    = hasPath(/\.circleci\/config\.ya?ml$/i);
+  const hasGitlab    = hasPath(/\.gitlab-ci\.ya?ml$/i);
+  const hasJenkins   = hasPath(/[Jj]enkinsfile/);
+  const hasDockerfile = hasPath(/^(dockerfile|dockerfile\.\w+)$/i);
+  const hasCompose   = hasPath(/docker-compose\.ya?ml$/i);
+  const hasDependabot = hasPath(/\.github\/dependabot\.ya?ml$/i);
+
+  if (hasGHActions) ciProviders.push('GitHub Actions');
+  if (hasTravis)    ciProviders.push('Travis CI');
+  if (hasCircle)    ciProviders.push('CircleCI');
+  if (hasGitlab)    ciProviders.push('GitLab CI');
+  if (hasJenkins)   ciProviders.push('Jenkins');
+
+  const hasTests    = hasContent(/(pytest|jest|cargo test|go test|npm test|yarn test|rspec|mocha)/);
+  const hasLint     = hasContent(/(eslint|pylint|flake8|ruff|prettier|golangci|rubocop)/);
+  const hasSecurity = hasDependabot || hasContent(/(trivy|snyk|codeql|bandit|semgrep)/);
+  const hasCaching  = hasContent(/cache:/);
+  const hasRelease  = hasContent(/(npm publish|cargo publish|release.*deploy|push.*registry)/);
+
+  // Dockerfile checks
+  if (hasDockerfile) {
+    for (const f of files) {
+      if (/^dockerfile(\.\w+)?$/i.test(f.path.split('/').pop())) {
+        const ct = f.content;
+        if (!/^USER\s/im.test(ct)) issues.push({ type:'Dockerfile', msg:'No USER instruction — runs as root' });
+        if (/FROM\s+\S+:latest/i.test(ct)) issues.push({ type:'Dockerfile', msg:'FROM uses :latest tag — pin to specific version' });
+        if (/apt-get install/.test(ct) && !/--no-install-recommends/.test(ct)) issues.push({ type:'Dockerfile', msg:'apt-get without --no-install-recommends' });
+        if (!/HEALTHCHECK/i.test(ct)) issues.push({ type:'Dockerfile', msg:'No HEALTHCHECK instruction' });
+        break;
+      }
+    }
+  }
+
+  // GH Actions checks
+  if (hasGHActions) {
+    for (const f of files) {
+      if (/\.github\/workflows\/.+\.ya?ml$/i.test(f.path)) {
+        const ct = f.content;
+        if (/uses:\s*\S+@(main|master|latest|HEAD)/i.test(ct)) issues.push({ type:'Actions', msg:'Unpinned action @main/master — pin to commit SHA' });
+        if (!/permissions:/i.test(ct)) issues.push({ type:'Actions', msg:'No explicit permissions: block' });
+        if (!/timeout-minutes:/i.test(ct)) issues.push({ type:'Actions', msg:'No timeout-minutes set' });
+        break;
+      }
+    }
+  }
+
+  let score = 0;
+  if (ciProviders.length) score += 25;
+  if (hasTests) score += 20;
+  if (hasLint) score += 10;
+  if (hasDockerfile) score += 10;
+  if (hasCompose) score += 5;
+  if (hasSecurity) score += 15;
+  if (hasRelease) score += 10;
+  if (hasCaching) score += 5;
+  score -= Math.min(20, issues.length * 4);
+  score = Math.max(0, Math.min(100, score));
+  const grade = score>=85?'A':score>=70?'B':score>=55?'C':score>=40?'D':'F';
+
+  return { score, grade, ciProviders, hasDockerfile, hasCompose, hasTests, hasLint, hasSecurity, hasCaching, hasRelease, issues,
+    summary: ciProviders.length ? `CI via: ${ciProviders.join(', ')}. ${issues.length} issue(s) found.` : 'No CI/CD configuration detected.' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — MONETIZATION POTENTIAL
+// ─────────────────────────────────────────────────────────────────────────────
+function runMonetization(files, readme, meta) {
+  const all = files.map(f=>f.content).join('\n').toLowerCase() + '\n' + (readme||'').toLowerCase();
+  const readmeL = (readme||'').toLowerCase();
+
+  const hasAuth     = /jwt|bearer token|oauth|passport\.js|nextauth|clerk\.|firebase.*auth|session.*secret/i.test(all);
+  const hasPayment  = /stripe|paddle|lemonsqueezy|paypal|billing|subscription|checkout/i.test(all);
+  const hasPricing  = /pricing|price|free.plan|pro.plan|premium|\$\d+|usd|monthly/i.test(readmeL);
+  const hasAPI      = /router\.(get|post|put|delete)|@app\.route|@router\.|graphql|api_key|rate.limit/i.test(all);
+  const hasDashboard = /dashboard|recharts|chart\.js|tremor|shadcn/i.test(all);
+  const hasCLI      = /argparse|click\b|typer\b|commander\.js|yargs|clap\b/i.test(all);
+
+  let category = 'tool';
+  if (/flask|fastapi|express|nextjs|next\.js|django|@app\.route/i.test(all)) category = 'saas-ready';
+  else if (/setup\.py|pyproject\.toml|"main":/i.test(all) && !hasAPI) category = 'library';
+  else if (/docker|kubernetes|terraform|ansible/i.test(all)) category = 'infra';
+  else if (/pygame|phaser|three\.js/i.test(all)) category = 'game';
+
+  let saasScore = 0;
+  if (hasAuth) saasScore += 3;
+  if (hasPayment) saasScore += 3;
+  if (hasAPI) saasScore += 2;
+  if (hasDashboard) saasScore += 1;
+  if ((meta?.stargazers_count||0) > 100) saasScore += 1;
+
+  const models = [];
+  if (category === 'saas-ready') models.push('SaaS subscription (monthly/annual)', 'Freemium', 'API usage tiers');
+  else if (category === 'library') models.push('Hosted managed version', 'Open Core (commercial plugins)', 'Paid support/consulting');
+  else if (category === 'tool') models.push('Paid Pro CLI version', 'Hosted web version', 'One-time purchase (Gumroad)');
+  else if (category === 'infra') models.push('Managed hosted version', 'Support contracts + SLA', 'Enterprise license');
+  else models.push('SaaS subscription', 'Freemium', 'One-time purchase');
+
+  const recs = [];
+  if (!hasAuth && category === 'saas-ready') recs.push('Add user authentication — required for subscription gating');
+  if (!hasPayment) recs.push('Integrate Stripe or Paddle to start monetizing');
+  if (!hasPricing) recs.push('Add a pricing section to the README to signal commercial intent');
+  if (category === 'library') recs.push('Build a hosted SaaS wrapper — many successful libraries do this (Sentry, PostHog)');
+
+  let score = 20 + saasScore * 5;
+  if (hasPayment) score += 10;
+  if (hasPricing) score += 5;
+  if ((meta?.stargazers_count||0) > 50) score += 5;
+  if ((meta?.stargazers_count||0) > 500) score += 5;
+  score = Math.max(0, Math.min(100, score));
+  const grade = score>=80?'A':score>=65?'B':score>=50?'C':score>=35?'D':'F';
+
+  return { score, grade, category, saasScore, hasAuth, hasPayment, hasPricing, hasAPI, hasDashboard, hasCLI, models, recs,
+    summary: `${category} · SaaS readiness: ${saasScore}/10 · Grade ${grade}` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — DEPLOYMENT DETECTOR
+// ─────────────────────────────────────────────────────────────────────────────
+const PLATFORMS = [
+  { name:'Vercel',             files:['vercel.json','.vercelignore'],                content:/vercel\b|@vercel\//i,       cat:'serverless' },
+  { name:'Netlify',            files:['netlify.toml','_redirects'],                  content:/netlify\b/i,                cat:'serverless' },
+  { name:'Railway',            files:['railway.toml','railway.json','Procfile'],     content:/railway\b/i,                cat:'paas' },
+  { name:'Fly.io',             files:['fly.toml'],                                   content:/fly\.io/i,                  cat:'paas' },
+  { name:'Render',             files:['render.yaml','render.yml'],                   content:/render\.com/i,              cat:'paas' },
+  { name:'Heroku',             files:['Procfile','app.json'],                         content:/heroku\b/i,                 cat:'paas' },
+  { name:'AWS',                files:['serverless.yml','template.yaml','cdk.json'],  content:/amazonaws|aws-cdk/i,        cat:'cloud' },
+  { name:'GCP',                files:['app.yaml','cloudbuild.yaml'],                 content:/google.*cloud|cloud.run/i,  cat:'cloud' },
+  { name:'Docker',             files:['Dockerfile','docker-compose.yml'],             content:/FROM\s+\w/,                 cat:'container' },
+  { name:'Kubernetes',         files:['Chart.yaml'],                                 content:/apiVersion:\s*v\d|kind:\s*(Deployment|Service)/i, cat:'container' },
+  { name:'GitHub Pages',       files:[],                                              content:/github.*pages|gh-pages/i,   cat:'static' },
+  { name:'Cloudflare Workers', files:['wrangler.toml','wrangler.json'],              content:/cloudflare.*workers|wrangler/i, cat:'edge' },
+];
+function runDeploymentDetector(files, tree) {
+  const pathSet = new Set((tree||[]).map(n=>n.path||'').concat(files.map(f=>f.path)).map(p=>p.split('/').pop().toLowerCase()));
+  const allContent = files.map(f=>f.content).join('\n');
+  const detected = [];
+
+  for (const p of PLATFORMS) {
+    const fileMatch = p.files.some(f => pathSet.has(f.toLowerCase()));
+    const contentMatch = p.content.test(allContent);
+    if (fileMatch || contentMatch) detected.push({ name: p.name, cat: p.cat, fileMatch, contentMatch });
+  }
+
+  const cats = new Set(detected.map(d=>d.cat));
+  return {
+    platforms: detected.map(d=>d.name),
+    details: detected,
+    containerReady: cats.has('container'),
+    serverlessReady: cats.has('serverless'),
+    edgeReady: cats.has('edge'),
+    primary: detected[0]?.name || 'None detected',
+    summary: detected.length ? `Detected: ${detected.map(d=>d.name).join(', ')}` : 'No deployment configuration found.',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STATIC ANALYSIS — MIGRATION ADVISOR
+// ─────────────────────────────────────────────────────────────────────────────
+const STACK_DETECT = [
+  { layer:'language',  name:'TypeScript',       re:/tsconfig\.json|"typescript":/i },
+  { layer:'language',  name:'Python 3',          re:/python_requires.*3\.|from typing import|#!/usr/bin/env python3/i },
+  { layer:'language',  name:'Python 2',          re:/print\s+['"]|from __future__ import print/i },
+  { layer:'language',  name:'Go',                re:/go\.mod|package main/i },
+  { layer:'language',  name:'Rust',              re:/Cargo\.toml|fn main\(\)/i },
+  { layer:'framework', name:'Next.js',           re:/next\.config\.|"next":/i },
+  { layer:'framework', name:'React',             re:/from 'react'|import React/i },
+  { layer:'framework', name:'Vue 3',             re:/vue@3|createApp\(|<script setup/i },
+  { layer:'framework', name:'Vue 2',             re:/vue@2|new Vue\(/i },
+  { layer:'framework', name:'FastAPI',           re:/from fastapi|FastAPI\(\)/i },
+  { layer:'framework', name:'Flask',             re:/from flask|Flask\(__name__\)/i },
+  { layer:'framework', name:'Express',           re:/express\(\)|app\.use\(|app\.get\(/i },
+  { layer:'framework', name:'Fastify',           re:/fastify\b|fastify\(\)/i },
+  { layer:'database',  name:'PostgreSQL',        re:/psycopg2|pg\b|asyncpg|@prisma.*postgresql/i },
+  { layer:'database',  name:'MySQL',             re:/mysql2?|pymysql/i },
+  { layer:'database',  name:'MongoDB',           re:/mongoose|pymongo|mongodb\+srv/i },
+  { layer:'database',  name:'SQLite',            re:/sqlite3|\.db$/i },
+  { layer:'css',       name:'Tailwind CSS',      re:/tailwindcss|tailwind\.config/i },
+  { layer:'css',       name:'Styled Components', re:/styled-components|styled\.\w+`/i },
+  { layer:'css',       name:'Bootstrap',         re:/bootstrap\b|btn-primary|col-md-/i },
+  { layer:'build',     name:'Vite',              re:/vite\b|vite\.config\./i },
+  { layer:'build',     name:'Webpack',           re:/webpack\.config|"webpack":/i },
+  { layer:'build',     name:'Create React App',  re:/react-scripts|create-react-app/i },
+];
+const MIGRATION_RULES = [
+  { from:'Create React App', to:'Vite',         reason:'CRA is deprecated. Vite is 10-100x faster.',  effort:'low',    priority:'critical' },
+  { from:'Webpack',          to:'Vite',         reason:'Vite cold starts ~10x faster for most SPAs.',  effort:'medium', priority:'high' },
+  { from:'Styled Components',to:'Tailwind CSS', reason:'Tailwind eliminates runtime CSS-in-JS.',        effort:'high',   priority:'medium' },
+  { from:'Bootstrap',        to:'Tailwind CSS', reason:'Better customization, less bloat.',             effort:'high',   priority:'low' },
+  { from:'Flask',            to:'FastAPI',      reason:'FastAPI is async, typed, and 2-3x faster.',    effort:'medium', priority:'high' },
+  { from:'Express',          to:'Fastify',      reason:'Fastify is 2x faster, native TypeScript.',     effort:'medium', priority:'medium' },
+  { from:'Vue 2',            to:'Vue 3',        reason:'Vue 2 reached EOL January 2024.',              effort:'medium', priority:'critical' },
+  { from:'Python 2',         to:'Python 3',     reason:'Python 2 is EOL since 2020 — security risk.',  effort:'high',   priority:'critical' },
+  { from:'MySQL',            to:'PostgreSQL',   reason:'PostgreSQL has better JSON, window functions.', effort:'high',   priority:'medium' },
+];
+function runMigrationAdvisor(files, readme) {
+  const all = files.map(f=>f.content).join('\n') + '\n' + (readme||'');
+  const stack = {};
+  for (const { layer, name, re } of STACK_DETECT) {
+    if (!stack[layer] && re.test(all)) stack[layer] = name;
+  }
+  const detected = new Set(Object.values(stack));
+  const migrations = MIGRATION_RULES.filter(r => detected.has(r.from));
+  const warnings = [];
+  if (detected.has('Python 2')) warnings.push('Python 2 is end-of-life since January 2020');
+  if (detected.has('Vue 2'))    warnings.push('Vue 2 reached end-of-life in December 2023');
+  if (detected.has('Create React App')) warnings.push('Create React App is deprecated (unmaintained)');
+
+  return { stack, migrations, warnings,
+    summary: migrations.length
+      ? `${Object.keys(stack).length} layers detected. ${migrations.filter(m=>m.priority==='critical').length} critical migration(s) needed.`
+      : `Modern stack: ${Object.values(stack).join(', ')||'—'}. No critical migrations.` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AI ANALYSIS (Groq)
 // ─────────────────────────────────────────────────────────────────────────────
 async function callGroq(repoData, groqKey) {
@@ -799,13 +1246,18 @@ async function callGroq(repoData, groqKey) {
 // RENDER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 function renderScoreRibbon(rd) {
-  const { security, techDebt, apiSurface, depRisk, cost } = rd;
+  const { security, techDebt, apiSurface, depRisk, cost, licenseRisk, readmeQuality, codeQuality, ciAnalysis, monetization } = rd;
   const cards = [
-    security ? `<div class="score-card"><div class="score-card-label">Security</div><div class="score-card-value ${gradeColor(security.grade)}">${security.score}</div><div class="score-card-sub">Grade ${security.grade} · ${security.counts.critical}C ${security.counts.high}H</div></div>` : '',
-    techDebt ? `<div class="score-card"><div class="score-card-label">Tech Debt</div><div class="score-card-value ${gradeColor(techDebt.grade)}">${techDebt.score}</div><div class="score-card-sub">Grade ${techDebt.grade} · ${techDebt.testRatioPct}% tests</div></div>` : '',
-    apiSurface ? `<div class="score-card"><div class="score-card-label">API Surface</div><div class="score-card-value" style="color:var(--accent)">${apiSurface.count}</div><div class="score-card-sub">${apiSurface.frameworks.slice(0,2).join(', ')||'endpoints'}</div></div>` : '',
-    depRisk ? `<div class="score-card"><div class="score-card-label">Dep Risk</div><div class="score-card-value ${gradeColor(depRisk.grade)}">${depRisk.riskScore}</div><div class="score-card-sub">Grade ${depRisk.grade} · ${depRisk.findings.length} risky</div></div>` : '',
-    cost ? `<div class="score-card"><div class="score-card-label">Rebuild Cost</div><div class="score-card-value" style="color:var(--green)">$${(cost.juniorUsd/1000).toFixed(0)}k</div><div class="score-card-sub">Jr · $${(cost.seniorUsd/1000).toFixed(0)}k Sr</div></div>` : '',
+    security     ? `<div class="score-card"><div class="score-card-label">Security</div><div class="score-card-value ${gradeColor(security.grade)}">${security.score}</div><div class="score-card-sub">Grade ${security.grade} · ${security.counts.critical}C ${security.counts.high}H</div></div>` : '',
+    techDebt     ? `<div class="score-card"><div class="score-card-label">Tech Debt</div><div class="score-card-value ${gradeColor(techDebt.grade)}">${techDebt.score}</div><div class="score-card-sub">Grade ${techDebt.grade} · ${techDebt.testRatioPct}% tests</div></div>` : '',
+    apiSurface   ? `<div class="score-card"><div class="score-card-label">API Surface</div><div class="score-card-value" style="color:var(--accent)">${apiSurface.count}</div><div class="score-card-sub">${apiSurface.frameworks.slice(0,2).join(', ')||'endpoints'}</div></div>` : '',
+    depRisk      ? `<div class="score-card"><div class="score-card-label">Dep Risk</div><div class="score-card-value ${gradeColor(depRisk.grade)}">${depRisk.riskScore}</div><div class="score-card-sub">Grade ${depRisk.grade} · ${depRisk.findings.length} risky</div></div>` : '',
+    cost         ? `<div class="score-card"><div class="score-card-label">Rebuild Cost</div><div class="score-card-value" style="color:var(--green)">$${(cost.juniorUsd/1000).toFixed(0)}k</div><div class="score-card-sub">Jr · $${(cost.seniorUsd/1000).toFixed(0)}k Sr</div></div>` : '',
+    licenseRisk  ? `<div class="score-card"><div class="score-card-label">License</div><div class="score-card-value" style="color:${RISK_COLOR[licenseRisk.risk]||'var(--muted)'}">${licenseRisk.grade}</div><div class="score-card-sub">${esc(licenseRisk.detected||'Unknown')}</div></div>` : '',
+    readmeQuality? `<div class="score-card"><div class="score-card-label">README</div><div class="score-card-value ${gradeColor(readmeQuality.grade)}">${readmeQuality.score}</div><div class="score-card-sub">Grade ${readmeQuality.grade} · ${readmeQuality.wordCount.toLocaleString()}w</div></div>` : '',
+    codeQuality  ? `<div class="score-card"><div class="score-card-label">Code Quality</div><div class="score-card-value ${gradeColor(codeQuality.grade)}">${codeQuality.score}</div><div class="score-card-sub">Grade ${codeQuality.grade} · ${codeQuality.smells.length} smell(s)</div></div>` : '',
+    ciAnalysis   ? `<div class="score-card"><div class="score-card-label">CI/CD</div><div class="score-card-value ${gradeColor(ciAnalysis.grade)}">${ciAnalysis.score}</div><div class="score-card-sub">Grade ${ciAnalysis.grade} · ${ciAnalysis.ciProviders.length ? ciAnalysis.ciProviders[0] : 'none'}</div></div>` : '',
+    monetization ? `<div class="score-card"><div class="score-card-label">Monetization</div><div class="score-card-value ${gradeColor(monetization.grade)}">${monetization.score}</div><div class="score-card-sub">Grade ${monetization.grade} · ${esc(monetization.category)}</div></div>` : '',
   ];
   document.getElementById('score-ribbon').innerHTML = cards.join('');
 }
@@ -950,6 +1402,151 @@ function renderCost(cost) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RENDER — NEW MODULES
+// ─────────────────────────────────────────────────────────────────────────────
+const RISK_COLOR = { safe:'var(--green)', notice:'var(--accent)', caution:'var(--yellow)', restricted:'var(--red)', unknown:'var(--muted)' };
+const PRIORITY_COLOR = { critical:'var(--red)', high:'var(--orange)', medium:'var(--yellow)', low:'var(--muted)' };
+
+function renderLicense(lic) {
+  const el = document.getElementById('license-content');
+  if (!lic) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see license analysis.</div>`; return; }
+  const riskStyle = `color:${RISK_COLOR[lic.risk]||'var(--muted)'}`;
+  el.innerHTML = `
+    <div class="section-summary">License: <strong style="${riskStyle}">${esc(lic.detected)} (Grade ${lic.grade})</strong> &nbsp;·&nbsp; Risk: ${lic.risk}</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val" style="${riskStyle}">${esc(lic.grade)}</div><div class="stat-lbl">Risk Grade</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${lic.commercial?'var(--green)':'var(--red)'}">${lic.commercial?'Yes':'No'}</div><div class="stat-lbl">Commercial OK</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${lic.copyleft?'var(--yellow)':'var(--green)'}">${lic.copyleft?'Yes':'No'}</div><div class="stat-lbl">Copyleft</div></div>
+      ${lic.sourceFile ? `<div class="stat-box"><div class="stat-val" style="font-size:12px">${esc(lic.sourceFile)}</div><div class="stat-lbl">Detected From</div></div>` : ''}
+    </div>
+    <div class="card" style="margin-top:16px"><div class="card-title">Advice</div><div class="card-body">${esc(lic.advice)}</div></div>
+    ${lic.signals.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Signals</div>${lic.signals.map(s=>`<div class="insight-item"><span class="insight-num">•</span>${esc(s)}</div>`).join('')}</div>` : ''}`;
+}
+
+function renderReadme(r) {
+  const el = document.getElementById('readme-content');
+  if (!r) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see README quality.</div>`; return; }
+  el.innerHTML = `
+    <div class="section-summary">Score: <strong class="${gradeColor(r.grade)}">${r.score}/100 (Grade ${r.grade})</strong> &nbsp;·&nbsp; ${r.wordCount.toLocaleString()} words</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val ${gradeColor(r.grade)}">${r.score}</div><div class="stat-lbl">Score /100</div></div>
+      <div class="stat-box"><div class="stat-val">${r.wordCount.toLocaleString()}</div><div class="stat-lbl">Word Count</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${r.hasBadges?'var(--green)':'var(--muted)'}">${r.hasBadges?'Yes':'No'}</div><div class="stat-lbl">Has Badges</div></div>
+      <div class="stat-box"><div class="stat-val">${r.sectionsFound.length}</div><div class="stat-lbl">Sections Found</div></div>
+    </div>
+    ${r.sectionsFound.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Sections Present</div><div class="tag-list">${r.sectionsFound.map(s=>`<span class="tag" style="background:var(--green-dim);color:var(--green)">${esc(s)}</span>`).join('')}</div></div>` : ''}
+    ${r.missing.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Missing Sections</div><div class="tag-list">${r.missing.map(s=>`<span class="tag" style="background:var(--red-dim);color:var(--red)">${esc(s)}</span>`).join('')}</div></div>` : ''}
+    ${r.signals.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Signals</div>${r.signals.map(s=>`<div class="insight-item"><span class="insight-num">•</span>${esc(s)}</div>`).join('')}</div>` : ''}`;
+}
+
+function renderCodeQuality(cq) {
+  const el = document.getElementById('codequality-content');
+  if (!cq) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see code quality analysis.</div>`; return; }
+  el.innerHTML = `
+    <div class="section-summary">Score: <strong class="${gradeColor(cq.grade)}">${cq.score}/100 (Grade ${cq.grade})</strong></div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val ${gradeColor(cq.grade)}">${cq.score}</div><div class="stat-lbl">Quality Score</div></div>
+      <div class="stat-box"><div class="stat-val">${cq.totalLines.toLocaleString()}</div><div class="stat-lbl">Total Lines</div></div>
+      <div class="stat-box"><div class="stat-val">${cq.sourceFiles}</div><div class="stat-lbl">Source Files</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${cq.testRatio>0.2?'var(--green)':'var(--red)'}">${(cq.testRatio*100).toFixed(0)}%</div><div class="stat-lbl">Test Ratio</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:${cq.longFunctions>5?'var(--red)':'var(--text)'}">${cq.longFunctions}</div><div class="stat-lbl">Long Functions</div></div>
+      <div class="stat-box"><div class="stat-val">${cq.todoCount}</div><div class="stat-lbl">TODOs</div></div>
+      <div class="stat-box"><div class="stat-val">${cq.fixmeCount}</div><div class="stat-lbl">FIXMEs</div></div>
+      <div class="stat-box"><div class="stat-val">${cq.largeFiles}</div><div class="stat-lbl">Large Files</div></div>
+    </div>
+    ${cq.smells.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Code Smells</div>${cq.smells.map(s=>`<div class="insight-item"><span class="insight-num" style="color:var(--red)">!</span>${esc(s)}</div>`).join('')}</div>` : '<div class="empty-state" style="margin-top:12px">No major code smells detected.</div>'}
+    ${cq.signals.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Signals</div>${cq.signals.map(s=>`<div class="insight-item"><span class="insight-num">•</span>${esc(s)}</div>`).join('')}</div>` : ''}`;
+}
+
+function renderCI(ci) {
+  const el = document.getElementById('ci-content');
+  if (!ci) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see CI/CD analysis.</div>`; return; }
+  const flags = [
+    ci.hasTests    ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Tests</span>` : `<span class="tag" style="background:var(--red-dim);color:var(--red)">No Tests</span>`,
+    ci.hasLint     ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Lint</span>` : '',
+    ci.hasSecurity ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Security Scan</span>` : '',
+    ci.hasCaching  ? `<span class="tag" style="background:var(--accent-dim);color:var(--accent)">Caching</span>` : '',
+    ci.hasRelease  ? `<span class="tag" style="background:var(--accent-dim);color:var(--accent)">Release Auto</span>` : '',
+    ci.hasDockerfile ? `<span class="tag">Dockerfile</span>` : '',
+    ci.hasCompose  ? `<span class="tag">Compose</span>` : '',
+  ].filter(Boolean).join('');
+  el.innerHTML = `
+    <div class="section-summary">Score: <strong class="${gradeColor(ci.grade)}">${ci.score}/100 (Grade ${ci.grade})</strong> &nbsp;·&nbsp; ${ci.summary}</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val ${gradeColor(ci.grade)}">${ci.score}</div><div class="stat-lbl">CI Score</div></div>
+      <div class="stat-box"><div class="stat-val">${ci.ciProviders.length ? ci.ciProviders.join(', ') : '—'}</div><div class="stat-lbl">CI Provider</div></div>
+      <div class="stat-box"><div class="stat-val">${ci.issues.length}</div><div class="stat-lbl">Issues Found</div></div>
+    </div>
+    <div class="card" style="margin-top:12px"><div class="card-title">Features</div><div class="tag-list">${flags||'<span style="color:var(--muted)">No CI detected</span>'}</div></div>
+    ${ci.issues.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Issues</div>${ci.issues.map(i=>`<div class="insight-item"><span class="insight-num" style="color:var(--yellow)">[${esc(i.type)}]</span>${esc(i.msg)}</div>`).join('')}</div>` : '<div style="margin-top:12px;color:var(--green);font-size:13px">No CI/CD issues detected.</div>'}`;
+}
+
+function renderMonetization(m) {
+  const el = document.getElementById('monetization-content');
+  if (!m) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see monetization potential.</div>`; return; }
+  const features = [
+    m.hasAuth     ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Auth</span>` : `<span class="tag" style="background:var(--red-dim);color:var(--red)">No Auth</span>`,
+    m.hasPayment  ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Payment</span>` : `<span class="tag" style="background:var(--red-dim);color:var(--red)">No Payment</span>`,
+    m.hasAPI      ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">API</span>` : '',
+    m.hasDashboard ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Dashboard UI</span>` : '',
+    m.hasPricing  ? `<span class="tag" style="background:var(--accent-dim);color:var(--accent)">Pricing in README</span>` : '',
+    m.hasCLI      ? `<span class="tag">CLI</span>` : '',
+  ].filter(Boolean).join('');
+  el.innerHTML = `
+    <div class="section-summary">Score: <strong class="${gradeColor(m.grade)}">${m.score}/100 (Grade ${m.grade})</strong> &nbsp;·&nbsp; ${m.summary}</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val ${gradeColor(m.grade)}">${m.score}</div><div class="stat-lbl">Potential Score</div></div>
+      <div class="stat-box"><div class="stat-val">${esc(m.category)}</div><div class="stat-lbl">Category</div></div>
+      <div class="stat-box"><div class="stat-val">${m.saasScore}/10</div><div class="stat-lbl">SaaS Readiness</div></div>
+    </div>
+    <div class="card" style="margin-top:12px"><div class="card-title">Features Detected</div><div class="tag-list">${features}</div></div>
+    <div class="card" style="margin-top:12px"><div class="card-title">Recommended Monetization Models</div>${m.models.map((model,i)=>`<div class="insight-item"><span class="insight-num">${i+1}.</span>${esc(model)}</div>`).join('')}</div>
+    ${m.recs.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Action Items</div>${m.recs.map(r=>`<div class="insight-item"><span class="insight-num" style="color:var(--accent)">→</span>${esc(r)}</div>`).join('')}</div>` : ''}`;
+}
+
+function renderDeployment(d) {
+  const el = document.getElementById('deployment-content');
+  if (!d) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see deployment detection.</div>`; return; }
+  const catColor = { serverless:'var(--accent)', paas:'var(--green)', cloud:'var(--purple)', container:'var(--orange)', static:'var(--muted)', edge:'var(--yellow)' };
+  const platformTags = d.details.map(p => `<span class="tag" style="background:var(--surface2);border-color:${catColor[p.cat]||'var(--border)'};color:${catColor[p.cat]||'var(--text)'}">${esc(p.name)}</span>`).join('');
+  const caps = [
+    d.containerReady  ? `<span class="tag" style="background:var(--green-dim);color:var(--green)">Container Ready</span>` : '',
+    d.serverlessReady ? `<span class="tag" style="background:var(--accent-dim);color:var(--accent)">Serverless Ready</span>` : '',
+    d.edgeReady       ? `<span class="tag" style="background:var(--yellow-dim);color:var(--yellow)">Edge Ready</span>` : '',
+  ].filter(Boolean).join('');
+  el.innerHTML = `
+    <div class="section-summary">${d.summary}</div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${d.platforms.length}</div><div class="stat-lbl">Platforms</div></div>
+      <div class="stat-box"><div class="stat-val" style="font-size:13px">${esc(d.primary)}</div><div class="stat-lbl">Primary</div></div>
+    </div>
+    ${d.platforms.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Detected Platforms</div><div class="tag-list">${platformTags}</div></div>` : '<div class="empty-state" style="margin-top:12px">No deployment platform detected. Add a Dockerfile + GitHub Actions to get started.</div>'}
+    ${caps ? `<div class="card" style="margin-top:12px"><div class="card-title">Capabilities</div><div class="tag-list">${caps}</div></div>` : ''}`;
+}
+
+function renderMigration(mg) {
+  const el = document.getElementById('migration-content');
+  if (!mg) { el.innerHTML = `<div class="empty-state">Run in Static or Full mode to see migration advice.</div>`; return; }
+  const stackHtml = Object.entries(mg.stack).map(([layer, tech]) =>
+    `<div class="dep-item"><div class="dep-header"><span class="dep-name">${esc(layer)}</span><span class="dep-ver">${esc(tech)}</span></div></div>`
+  ).join('');
+  const migrHtml = mg.migrations.map(m => `
+    <div class="dep-item" style="border-left:3px solid ${PRIORITY_COLOR[m.priority]||'var(--muted)'}">
+      <div class="dep-header">
+        <span class="dep-name">${esc(m.from)} → ${esc(m.to)}</span>
+        <span style="color:${PRIORITY_COLOR[m.priority]};font-size:11px;font-weight:700">${m.priority.toUpperCase()}</span>
+        <span class="dep-ver">effort: ${m.effort}</span>
+      </div>
+      <div class="dep-reason">${esc(m.reason)}</div>
+    </div>`).join('');
+  el.innerHTML = `
+    <div class="section-summary">${esc(mg.summary)}</div>
+    ${mg.warnings.length ? `<div style="margin:12px 0;padding:12px 16px;background:var(--red-dim);border-radius:8px;border:1px solid var(--red)">${mg.warnings.map(w=>`<div style="color:var(--red);font-size:13px">⚠ ${esc(w)}</div>`).join('')}</div>` : ''}
+    ${stackHtml ? `<div class="card" style="margin-top:12px"><div class="card-title">Detected Stack</div><div class="dep-items">${stackHtml}</div></div>` : ''}
+    ${mg.migrations.length ? `<div class="card" style="margin-top:12px"><div class="card-title">Migration Opportunities</div><div class="dep-items">${migrHtml}</div></div>` : '<div class="empty-state" style="margin-top:12px">No critical migrations needed — modern stack detected.</div>'}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN ANALYSIS FLOW
 // ─────────────────────────────────────────────────────────────────────────────
 async function runAnalysis() {
@@ -984,12 +1581,20 @@ async function runAnalysis() {
     // Step 2: Static analysis
     if (currentMode !== 'ai') {
       stepSet('step-static', 'active');
-      const security = runSecurityAudit(repoData.files);
-      const techDebt = runTechDebt(repoData.files, repoData.tree);
-      const apiSurface = runApiSurface(repoData.files);
-      const depRisk = runDepRisk(repoData.files);
-      const cost = estimateCost(repoData.files);
-      reportData = { ...reportData, security, techDebt, apiSurface, depRisk, cost };
+      const security     = runSecurityAudit(repoData.files);
+      const techDebt     = runTechDebt(repoData.files, repoData.tree);
+      const apiSurface   = runApiSurface(repoData.files);
+      const depRisk      = runDepRisk(repoData.files);
+      const cost         = estimateCost(repoData.files);
+      const licenseRisk  = runLicenseRisk(repoData.files, repoData.readme);
+      const readmeQuality= runReadmeQuality(repoData.files, repoData.readme);
+      const codeQuality  = runCodeQuality(repoData.files);
+      const ciAnalysis   = runCIAnalyzer(repoData.files, repoData.tree);
+      const monetization = runMonetization(repoData.files, repoData.readme, repoData.meta);
+      const deployment   = runDeploymentDetector(repoData.files, repoData.tree);
+      const migration    = runMigrationAdvisor(repoData.files, repoData.readme);
+      reportData = { ...reportData, security, techDebt, apiSurface, depRisk, cost,
+        licenseRisk, readmeQuality, codeQuality, ciAnalysis, monetization, deployment, migration };
       stepSet('step-static', 'done');
 
       // Show report immediately with static data
@@ -1032,6 +1637,13 @@ function showReport(repoData, ai) {
   renderApiSurface(rd.apiSurface);
   renderDepRisk(rd.depRisk);
   renderCost(rd.cost);
+  renderLicense(rd.licenseRisk);
+  renderReadme(rd.readmeQuality);
+  renderCodeQuality(rd.codeQuality);
+  renderCI(rd.ciAnalysis);
+  renderMonetization(rd.monetization);
+  renderDeployment(rd.deployment);
+  renderMigration(rd.migration);
   document.getElementById('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
